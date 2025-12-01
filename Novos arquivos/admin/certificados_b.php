@@ -1275,10 +1275,20 @@ include __DIR__ . '/../vision/includes/sidebar.php';
     }
     
     function renderParticipantsList() {
+        console.log('🎨 Renderizando lista de participantes...');
+        console.log('   Total de participantes:', csvParticipants.length);
+        
         const container = document.getElementById('participants_list');
+        
+        if (!container) {
+            console.error('❌ Container participants_list não encontrado!');
+            return;
+        }
+        
         let html = '';
         
         csvParticipants.forEach((p, index) => {
+            console.log(`   ${index + 1}. ${p.name} (${p.email})`);
             html += `
                 <div class="participant-item">
                     <input type="checkbox" 
@@ -1297,6 +1307,7 @@ include __DIR__ . '/../vision/includes/sidebar.php';
         });
         
         container.innerHTML = html;
+        console.log('✅ Lista renderizada com sucesso!');
     }
     
     function selectAllParticipants() {
@@ -1327,10 +1338,20 @@ include __DIR__ . '/../vision/includes/sidebar.php';
     </script>
     
     function renderParticipantsList() {
+        console.log('🎨 Renderizando lista de participantes...');
+        console.log('   Total de participantes:', csvParticipants.length);
+        
         const container = document.getElementById('participants_list');
+        
+        if (!container) {
+            console.error('❌ Container participants_list não encontrado!');
+            return;
+        }
+        
         let html = '';
         
         csvParticipants.forEach((p, index) => {
+            console.log(`   ${index + 1}. ${p.name} (${p.email})`);
             html += `
                 <div class="participant-item">
                     <input type="checkbox" 
@@ -1349,6 +1370,7 @@ include __DIR__ . '/../vision/includes/sidebar.php';
         });
         
         container.innerHTML = html;
+        console.log('✅ Lista renderizada com sucesso!');
     }
     
     function selectAllParticipants() {
