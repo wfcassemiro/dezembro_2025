@@ -1314,14 +1314,14 @@ include __DIR__ . '/../vision/includes/sidebar.php';
         document.querySelectorAll('input[name="participant_emails[]"]').forEach(cb => {
             cb.checked = true;
         });
-        updateCounters();
+        updateCsvCounters();
     }
     
     function deselectAllParticipants() {
         document.querySelectorAll('input[name="participant_emails[]"]').forEach(cb => {
             cb.checked = false;
         });
-        updateCounters();
+        updateCsvCounters();
     }
     
     function updateCsvCounters() {
