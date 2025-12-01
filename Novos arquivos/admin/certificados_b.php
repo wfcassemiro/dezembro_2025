@@ -2185,13 +2185,34 @@ include __DIR__ . '/../vision/includes/sidebar.php';
 }
 
 .modal-content {
-    margin: 8% auto;
+    margin: 2% auto;
     padding: 35px;
     border-radius: 20px;
     width: 90%;
     max-width: 500px;
+    max-height: 95vh;
+    overflow-y: auto;
     position: relative;
     box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5);
+}
+
+/* Scrollbar customizado para o modal */
+.modal-content::-webkit-scrollbar {
+    width: 8px;
+}
+
+.modal-content::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 10px;
+}
+
+.modal-content::-webkit-scrollbar-thumb {
+    background: rgba(192, 132, 252, 0.5);
+    border-radius: 10px;
+}
+
+.modal-content::-webkit-scrollbar-thumb:hover {
+    background: rgba(192, 132, 252, 0.7);
 }
 
 .modal-content h3 {
