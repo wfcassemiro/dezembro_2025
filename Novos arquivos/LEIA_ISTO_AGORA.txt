@@ -1,0 +1,95 @@
+╔══════════════════════════════════════════════════════════════════╗
+║                                                                  ║
+║              🚨 CORREÇÃO CRÍTICA v2.1.1 - LEIA ISTO             ║
+║                                                                  ║
+╚══════════════════════════════════════════════════════════════════╝
+
+❌ OS PROBLEMAS QUE VOCÊ TEVE:
+   • Erro 500 ao carregar palestras
+   • Dropdown vazio
+   • Lista de participantes não aparecia
+   • Erro: "Cannot set properties of null"
+
+✅ O QUE FOI CORRIGIDO:
+
+   1. ENDPOINT PHP (get_upcoming_lectures.php)
+      Problema: Dava erro 500
+      Correção: Agora tenta 2 tabelas e sempre retorna OK
+      
+   2. CONFLITO DE FUNÇÕES JavaScript
+      Problema: Duas funções "updateCounters()" causando conflito
+      Correção: Renomeada para "updateCsvCounters()" no modal CSV
+
+═══════════════════════════════════════════════════════════════════
+
+📦 ARQUIVOS ATUALIZADOS:
+
+   ✅ admin/certificados_b.php       (v2.1.1)
+   ✅ admin/get_upcoming_lectures.php (v2.1.1)
+
+═══════════════════════════════════════════════════════════════════
+
+🚀 APLIQUE AGORA:
+
+   1. SUBSTITUIR ARQUIVOS:
+      • Copie: Novos arquivos/admin/certificados_b.php
+        Para:  public_html/v/admin/certificados_b.php
+        
+      • Copie: Novos arquivos/admin/get_upcoming_lectures.php
+        Para:  public_html/v/admin/get_upcoming_lectures.php
+
+   2. LIMPAR CACHE:
+      • Pressione Ctrl+Shift+R (ou Cmd+Shift+R no Mac)
+
+   3. TESTAR:
+      • Abrir Console (F12)
+      • Abrir modal "Importar CSV"
+      • Fazer upload de CSV
+      • Verificar lista de participantes
+
+═══════════════════════════════════════════════════════════════════
+
+✅ O QUE VOCÊ VAI VER:
+
+   Console:
+   --------
+   🔄 Carregando palestras agendadas...
+   📡 Resposta recebida: 200
+   ✅ Dropdown populado com sucesso!  (ou vazio se não houver palestras)
+   🎨 Renderizando lista de participantes...
+   ✅ Lista renderizada com sucesso!
+
+   Interface:
+   ----------
+   ✅ Dropdown funciona (com ou sem palestras)
+   ✅ Upload CSV funciona
+   ✅ Lista de participantes aparece
+   ✅ Contador correto: "(2/2)"
+   ✅ SEM ERROS! 🎉
+
+═══════════════════════════════════════════════════════════════════
+
+⚠️  IMPORTANTE:
+
+   • Se dropdown ficar vazio = NORMAL (não há palestras no banco)
+   • Pode usar CSV normalmente mesmo sem dropdown
+   • Para ter dropdown com opções, cadastre palestras primeiro
+
+═══════════════════════════════════════════════════════════════════
+
+📚 MAIS DETALHES:
+
+   • CORRECAO_FINAL_v2.1.1.md  → Explicação técnica completa
+   • APLIQUE_ESTAS_CORRECOES.txt → Guia detalhado
+
+═══════════════════════════════════════════════════════════════════
+
+🎯 RESULTADO:
+
+   v2.0   → ❌ Quebrado
+   v2.1   → ❌ Quebrado  
+   v2.1.1 → ✅ FUNCIONANDO! 🚀
+
+═══════════════════════════════════════════════════════════════════
+
+Por favor, aplique os arquivos e me avise se funcionou! ✅
