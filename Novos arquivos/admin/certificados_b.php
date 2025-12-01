@@ -1452,7 +1452,6 @@ include __DIR__ . '/../vision/includes/sidebar.php';
                 document.getElementById('csv_date_hidden').value = lectureDate;
             }
             document.getElementById('duration_minutes_manual').value = duration;
-            document.getElementById('participants_count').textContent = participantsCount;
             
             // Mostrar prévia
             if (participantsCount > 0) {
