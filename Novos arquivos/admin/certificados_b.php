@@ -1296,7 +1296,7 @@ include __DIR__ . '/../vision/includes/sidebar.php';
                            value="${p.email}" 
                            id="participant_${index}" 
                            ${p.selected ? 'checked' : ''} 
-                           onchange="updateCounters()">
+                           onchange="updateCsvCounters()">
                     <label for="participant_${index}" class="participant-info" style="cursor: pointer;">
                         <span class="participant-name">${p.name}</span>
                         <span class="participant-email">${p.email}</span>
