@@ -1477,6 +1477,95 @@ include __DIR__ . '/../vision/includes/sidebar.php';
         
         reader.readAsText(file, 'UTF-8');
     }
+    
+    // Função para carregar palestras agendadas ao abrir o modal
+    function loadScheduledLectures() {
+        fetch('get_upcoming_lectures.php')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.lectures) {
+                    const select = document.getElementById('scheduled_lecture_select');
+                    
+                    // Limpar opções anteriores (exceto a primeira)
+                    while (select.options.length > 1) {
+                        select.remove(1);
+                    }
+                    
+                    // Adicionar palestras
+                    data.lectures.forEach(lecture => {
+                        const option = document.createElement('option');
+                        option.value = JSON.stringify(lecture);
+                        option.textContent = `${lecture.formatted_date} - ${lecture.title} (${lecture.speaker})`;
+                        select.appendChild(option);
+                    });
+                }
+            })
+            .catch(error => {
+                console.error('Erro ao carregar palestras:', error);
+            });
+    }
+    
+    // Função para carregar dados da palestra selecionada
+    function loadLectureData(jsonData) {
+        if (!jsonData) return;
+        
+        try {
+            const lecture = JSON.parse(jsonData);
+            
+            // Preencher campos
+            document.getElementById('lecture_title_manual').value = lecture.title || '';
+            document.getElementById('speaker_name_manual').value = lecture.speaker || '';
+            
+            // Preencher data
+            if (lecture.date_input) {
+                document.getElementById('csv_date_display').value = lecture.date_input;
+                document.getElementById('csv_date_hidden').value = lecture.date_input;
+            }
+            
+            // Preencher duração (converter de horas para minutos se necessário)
+            if (lecture.duration_hours) {
+                const minutes = lecture.duration_hours * 60;
+                document.getElementById('duration_minutes_manual').value = minutes;
+            }
+            
+            // Mostrar seção de dados da palestra
+            document.getElementById('lecture_data_section').style.display = 'block';
+            
+            // Mostrar mensagem de sucesso
+            const infoHtml = `
+                <ul style="margin: 5px 0; padding-left: 20px; color: rgba(255, 255, 255, 0.9);">
+                    <li><strong>Palestra:</strong> ${lecture.title}</li>
+                    <li><strong>Palestrante:</strong> ${lecture.speaker}</li>
+                    <li><strong>Data:</strong> ${lecture.formatted_date}</li>
+                    <li><strong>Duração:</strong> ${lecture.duration_hours * 60} minutos</li>
+                </ul>
+                <p style="color: #2ecc71; margin-top: 10px;">
+                    <i class="fas fa-check-circle"></i> Dados carregados! Agora faça upload do CSV com os participantes.
+                </p>
+            `;
+            document.getElementById('csv_info').innerHTML = infoHtml;
+            document.getElementById('csv_preview').style.display = 'block';
+            
+        } catch (error) {
+            console.error('Erro ao processar dados da palestra:', error);
+            alert('Erro ao carregar dados da palestra');
+        }
+    }
+    
+    // Modificar a função de abertura do modal para carregar as palestras
+    const originalOpenModal = window.openModal;
+    window.openModal = function(modalId) {
+        if (originalOpenModal) {
+            originalOpenModal(modalId);
+        } else {
+            document.getElementById(modalId).style.display = 'flex';
+        }
+        
+        // Carregar palestras quando abrir o modal CSV
+        if (modalId === 'csvImportModal') {
+            loadScheduledLectures();
+        }
+    };
     </script>    
 </div>
 
