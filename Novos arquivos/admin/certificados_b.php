@@ -1337,69 +1337,6 @@ include __DIR__ . '/../vision/includes/sidebar.php';
     }
     </script>
     
-    function renderParticipantsList() {
-        console.log('🎨 Renderizando lista de participantes...');
-        console.log('   Total de participantes:', csvParticipants.length);
-        
-        const container = document.getElementById('participants_list');
-        
-        if (!container) {
-            console.error('❌ Container participants_list não encontrado!');
-            return;
-        }
-        
-        let html = '';
-        
-        csvParticipants.forEach((p, index) => {
-            console.log(`   ${index + 1}. ${p.name} (${p.email})`);
-            html += `
-                <div class="participant-item">
-                    <input type="checkbox" 
-                           name="participant_emails[]" 
-                           value="${p.email}" 
-                           id="participant_${index}" 
-                           ${p.selected ? 'checked' : ''} 
-                           onchange="updateCounters()">
-                    <label for="participant_${index}" class="participant-info" style="cursor: pointer;">
-                        <span class="participant-name">${p.name}</span>
-                        <span class="participant-email">${p.email}</span>
-                    </label>
-                    <span class="participant-time">${p.minutes} min</span>
-                </div>
-            `;
-        });
-        
-        container.innerHTML = html;
-        console.log('✅ Lista renderizada com sucesso!');
-    }
-    
-    function selectAllParticipants() {
-        document.querySelectorAll('input[name="participant_emails[]"]').forEach(cb => {
-            cb.checked = true;
-        });
-        updateCounters();
-    }
-    
-    function deselectAllParticipants() {
-        document.querySelectorAll('input[name="participant_emails[]"]').forEach(cb => {
-            cb.checked = false;
-        });
-        updateCounters();
-    }
-    
-    function updateCounters() {
-        const total = csvParticipants.length;
-        const selected = document.querySelectorAll('input[name="participant_emails[]"]:checked').length;
-        
-        document.getElementById('total_participants_count').textContent = total;
-        document.getElementById('selected_count').textContent = selected;
-        document.getElementById('certificates_to_generate').textContent = selected;
-        
-        // Habilitar/desabilitar botão de gerar
-        document.getElementById('import_csv_btn').disabled = (selected === 0);
-    }
-    </script>
-    
     <style>
     .close {
         color: #aaa;
