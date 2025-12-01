@@ -1450,6 +1450,7 @@ include __DIR__ . '/../vision/includes/sidebar.php';
             }
             if (lectureDate) {
                 document.getElementById('csv_date_hidden').value = lectureDate;
+                document.getElementById('csv_date_display').value = lectureDate;
             }
             document.getElementById('duration_minutes_manual').value = duration;
             
