@@ -1481,11 +1481,24 @@ include __DIR__ . '/../vision/includes/sidebar.php';
     
     // Função para carregar palestras agendadas ao abrir o modal
     function loadScheduledLectures() {
+        console.log('🔄 Carregando palestras agendadas...');
+        
         fetch('get_upcoming_lectures.php')
-            .then(response => response.json())
+            .then(response => {
+                console.log('📡 Resposta recebida:', response.status);
+                return response.json();
+            })
             .then(data => {
+                console.log('📊 Dados recebidos:', data);
+                
                 if (data.success && data.lectures) {
+                    console.log('✅ Palestras encontradas:', data.lectures.length);
                     const select = document.getElementById('scheduled_lecture_select');
+                    
+                    if (!select) {
+                        console.error('❌ Elemento select não encontrado!');
+                        return;
+                    }
                     
                     // Limpar opções anteriores (exceto a primeira)
                     while (select.options.length > 1) {
@@ -1493,16 +1506,22 @@ include __DIR__ . '/../vision/includes/sidebar.php';
                     }
                     
                     // Adicionar palestras
-                    data.lectures.forEach(lecture => {
+                    data.lectures.forEach((lecture, index) => {
                         const option = document.createElement('option');
                         option.value = JSON.stringify(lecture);
                         option.textContent = `${lecture.formatted_date} - ${lecture.title} (${lecture.speaker})`;
                         select.appendChild(option);
+                        console.log(`  ${index + 1}. ${lecture.title}`);
                     });
+                    
+                    console.log('✅ Dropdown populado com sucesso!');
+                } else {
+                    console.warn('⚠️ Nenhuma palestra encontrada ou erro no servidor');
                 }
             })
             .catch(error => {
-                console.error('Erro ao carregar palestras:', error);
+                console.error('❌ Erro ao carregar palestras:', error);
+                alert('Erro ao carregar palestras agendadas. Verifique o console para mais detalhes.');
             });
     }
     
