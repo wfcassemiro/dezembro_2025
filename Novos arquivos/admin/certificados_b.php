@@ -1262,7 +1262,7 @@ include __DIR__ . '/../vision/includes/sidebar.php';
                 document.getElementById('lecture_data_section').style.display = 'block';
                 document.getElementById('import_csv_btn').disabled = false;
                 
-                updateCounters();
+                updateCsvCounters();
             } else {
                 alert('Nenhum participante válido encontrado no CSV.');
                 document.getElementById('csv_preview').style.display = 'none';
