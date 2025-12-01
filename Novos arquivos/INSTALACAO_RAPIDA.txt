@@ -1,0 +1,80 @@
+╔══════════════════════════════════════════════════════════════╗
+║          📦 INSTRUÇÕES DE INSTALAÇÃO RÁPIDA                 ║
+║          Sistema de Certificados T101 - v2.0                ║
+╚══════════════════════════════════════════════════════════════╝
+
+🎯 O QUE FOI CORRIGIDO:
+   ✅ Erro JavaScript ao carregar CSV
+   ✅ Campos não preenchidos corretamente
+   ✅ Modal não funcionava ao selecionar arquivo
+
+🆕 NOVA FUNCIONALIDADE:
+   ✅ Dropdown com palestras agendadas
+   ✅ Auto-preenchimento de título, palestrante e data
+   ✅ Processo mais rápido e com menos erros
+
+═══════════════════════════════════════════════════════════════
+
+📋 PASSO A PASSO DA INSTALAÇÃO:
+
+1️⃣  FAZER BACKUP (IMPORTANTE!)
+    └─ Copie os arquivos atuais antes de substituir:
+       • public_html/v/admin/certificados_b.php
+
+2️⃣  SUBSTITUIR ARQUIVO PRINCIPAL
+    └─ Copie de:   Novos arquivos/admin/certificados_b.php
+       Para:       public_html/v/admin/certificados_b.php
+
+3️⃣  ADICIONAR NOVO ARQUIVO
+    └─ Copie de:   Novos arquivos/admin/get_upcoming_lectures.php
+       Para:       public_html/v/admin/get_upcoming_lectures.php
+
+4️⃣  TESTAR
+    └─ Acesse: seu-dominio.com/v/admin/certificados_b.php
+       • Clique em "Importar CSV"
+       • Veja se o dropdown de palestras aparece
+       • Selecione uma palestra
+       • Verifique se os campos são preenchidos
+
+═══════════════════════════════════════════════════════════════
+
+🧪 COMO TESTAR:
+
+TESTE 1: Dropdown de palestras
+   → Abrir modal
+   → Ver dropdown com palestras
+   → Lista formatada: "01/12/2025 - Título (Palestrante)"
+
+TESTE 2: Auto-preenchimento
+   → Selecionar uma palestra
+   → Ver campos preenchidos automaticamente
+   → Data, título, palestrante, duração
+
+TESTE 3: CSV
+   → Fazer upload do CSV
+   → Ver informações extraídas
+   → Gerar certificados
+
+═══════════════════════════════════════════════════════════════
+
+❓ PROBLEMAS?
+
+⚠️  Dropdown vazio?
+    → Verifique se há palestras em "upcoming_announcements"
+    → Palestras devem ter data dos últimos 30 dias
+
+⚠️  Erro 403 ao abrir modal?
+    → Verifique se está logado como admin
+    → Arquivo get_upcoming_lectures.php no local correto
+
+⚠️  Campos não preenchem?
+    → Abra console (F12)
+    → Veja erros JavaScript
+    → Verifique se get_upcoming_lectures.php está acessível
+
+═══════════════════════════════════════════════════════════════
+
+📞 SUPORTE:
+   Consulte o README.md para documentação completa
+
+═══════════════════════════════════════════════════════════════
