@@ -955,6 +955,23 @@ include __DIR__ . '/../vision/includes/sidebar.php';
                 <!-- Campo de data (será preenchido automaticamente) -->
                 <input type="hidden" name="csv_date" id="csv_date_hidden">
                 
+                <!-- Seletor de Palestras Agendadas -->
+                <div class="form-group">
+                    <label for="scheduled_lecture_select">
+                        <i class="fas fa-calendar-alt"></i> Selecionar Palestra Agendada
+                    </label>
+                    <select id="scheduled_lecture_select" class="form-control" onchange="loadLectureData(this.value)">
+                        <option value="">-- Carregar dados de uma palestra agendada --</option>
+                    </select>
+                    <small style="color: rgba(255, 255, 255, 0.6); display: block; margin-top: 5px;">
+                        Selecione uma palestra para preencher automaticamente título, palestrante e data
+                    </small>
+                </div>
+                
+                <div style="text-align: center; margin: 20px 0; color: rgba(255, 255, 255, 0.5); font-size: 0.9rem;">
+                    — OU —
+                </div>
+                
                 <!-- Upload do arquivo -->
                 <div class="form-group">
                     <label for="csv_file">Selecionar arquivo CSV *</label>
