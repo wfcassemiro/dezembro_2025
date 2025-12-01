@@ -1328,12 +1328,18 @@ include __DIR__ . '/../vision/includes/sidebar.php';
         const total = csvParticipants.length;
         const selected = document.querySelectorAll('input[name="participant_emails[]"]:checked').length;
         
-        document.getElementById('total_participants_count').textContent = total;
-        document.getElementById('selected_count').textContent = selected;
-        document.getElementById('certificates_to_generate').textContent = selected;
+        // Verificar se elementos existem antes de atualizar
+        const totalElem = document.getElementById('total_participants_count');
+        const selectedElem = document.getElementById('selected_count');
+        const certsElem = document.getElementById('certificates_to_generate');
+        const btnElem = document.getElementById('import_csv_btn');
+        
+        if (totalElem) totalElem.textContent = total;
+        if (selectedElem) selectedElem.textContent = selected;
+        if (certsElem) certsElem.textContent = selected;
         
         // Habilitar/desabilitar botão de gerar
-        document.getElementById('import_csv_btn').disabled = (selected === 0);
+        if (btnElem) btnElem.disabled = (selected === 0);
     }
     </script>
     
