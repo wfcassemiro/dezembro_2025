@@ -1324,7 +1324,7 @@ include __DIR__ . '/../vision/includes/sidebar.php';
         updateCounters();
     }
     
-    function updateCounters() {
+    function updateCsvCounters() {
         const total = csvParticipants.length;
         const selected = document.querySelectorAll('input[name="participant_emails[]"]:checked').length;
         
