@@ -1,0 +1,247 @@
+<?php
+// includes/certificate_pdf_generator.php
+
+/**
+ * Gera um certificado em formato PDF usando TCPDF com design T101
+ * @param string $certificate_id UUID do certificado
+ * @param array $certificate_data Dados do certificado
+ * @param string $log_prefix Prefixo para logs
+ * @param callable $logger Função de log
+ * @return string|false Caminho do PDF gerado ou false em caso de erro
+ */
+function generateCertificatePDF($certificate_id, $certificate_data, $log_prefix, $logger) {
+    $logger("DEBUG: [$log_prefix] Iniciando geração de PDF T101 para ID: $certificate_id");
+    
+    // Verificar se TCPDF está disponível
+    $tcpdf_paths = [
+        __DIR__ . '/../vendor/tecnickcom/tcpdf/tcpdf.php',
+        __DIR__ . '/../tcpdf/tcpdf.php',
+        '/usr/share/php/tcpdf/tcpdf.php'
+    ];
+    
+    $tcpdf_found = false;
+    foreach ($tcpdf_paths as $path) {
+        if (file_exists($path)) {
+            require_once $path;
+            $tcpdf_found = true;
+            $logger("DEBUG: [$log_prefix] TCPDF encontrado em: $path");
+            break;
+        }
+    }
+    
+    if (!$tcpdf_found) {
+        $logger("ERRO: [$log_prefix] TCPDF não encontrado. Usando fallback para PNG->PDF");
+        return generatePDFFromPNG($certificate_id, $certificate_data, $log_prefix, $logger);
+    }
+    
+    try {
+        // Criar nova instância TCPDF em paisagem (A4 landscape)
+        $pdf = new TCPDF('L', 'mm', 'A4', true, 'UTF-8', false);
+        
+        // Configurações do documento
+        $pdf->SetCreator('Translators101');
+        $pdf->SetAuthor('Translators101');
+        $pdf->SetTitle('Certificado de Participação T101');
+        $pdf->SetSubject('Certificado Digital T101');
+        
+        // Remover header e footer padrão
+        $pdf->setPrintHeader(false);
+        $pdf->setPrintFooter(false);
+        
+        // Adicionar página
+        $pdf->AddPage();
+        
+        // Definir margens mínimas
+        $pdf->SetMargins(5, 5, 5);
+        
+        // Cores T101
+        $purple_color = array(142, 68, 173); // #8e44ad - cor oficial T101
+        $black_color = array(0, 0, 0);
+        $red_color = array(220, 53, 69);
+        $gold_color = array(255, 215, 0);
+        
+        // Verificar se existe template T101
+        $template_path = __DIR__ . '/../images/template.png';
+        if (file_exists($template_path)) {
+            // Usar template oficial T101 como fundo
+            $pdf->Image($template_path, 0, 0, 297, 210, 'PNG', '', '', false, 300, '', false, false, 0);
+            $logger("DEBUG: [$log_prefix] Template T101 oficial adicionado ao PDF");
+        } else {
+            // Fundo alternativo se template não existir
+            $pdf->SetFillColor(240, 240, 240);
+            $pdf->Rect(0, 0, 297, 210, 'F');
+            
+            // Adicionar bordas decorativas
+            $pdf->SetDrawColor($purple_color[0], $purple_color[1], $purple_color[2]);
+            $pdf->SetLineWidth(2);
+            $pdf->Rect(10, 10, 277, 190);
+            $pdf->Rect(15, 15, 267, 180);
+            
+            $logger("DEBUG: [$log_prefix] Template alternativo criado");
+        }
+        
+        // ========== LAYOUT IDÊNTICO AO PNG T101 ==========
+        
+        // 🏢 Logo/Título Principal
+        $pdf->SetFont('helvetica', 'B', 28);
+        $pdf->SetTextColor($purple_color[0], $purple_color[1], $purple_color[2]);
+        $pdf->SetY(25);
+        $pdf->Cell(0, 12, 'TRANSLATORS101', 0, 1, 'C');
+        
+        $pdf->SetFont('helvetica', 'B', 24);
+        $pdf->Cell(0, 10, 'CERTIFICADO DE PARTICIPAÇÃO', 0, 1, 'C');
+        
+        // 👤 Nome do Usuário (posição similar ao PNG)
+        $pdf->SetFont('helvetica', 'B', 20);
+        $pdf->SetTextColor($black_color[0], $black_color[1], $black_color[2]);
+        $pdf->SetY(75);
+        $pdf->Cell(0, 8, 'Certificamos que', 0, 1, 'C');
+        
+        $pdf->SetFont('helvetica', 'B', 26);
+        $pdf->SetTextColor($purple_color[0], $purple_color[1], $purple_color[2]);
+        $pdf->SetY(90);
+        $pdf->Cell(0, 12, $certificate_data['user_name'], 0, 1, 'C');
+        
+        // 📚 Texto de participação
+        $pdf->SetFont('helvetica', '', 16);
+        $pdf->SetTextColor($black_color[0], $black_color[1], $black_color[2]);
+        $pdf->SetY(110);
+        $pdf->Cell(0, 8, 'participou da palestra', 0, 1, 'C');
+        
+        // 🎯 Título da Palestra (com quebra inteligente)
+        $pdf->SetFont('helvetica', 'B', 18);
+        $pdf->SetTextColor($purple_color[0], $purple_color[1], $purple_color[2]);
+        
+        $lecture_title = $certificate_data['lecture_title'];
+        if (strlen($lecture_title) > 60) {
+            // Quebrar em duas linhas (igual ao PNG)
+            $words = explode(' ', $lecture_title);
+            $line1 = '';
+            $line2 = '';
+            $switch_to_line2 = false;
+            
+            foreach ($words as $word) {
+                if (!$switch_to_line2 && strlen($line1 . ' ' . $word) <= 60) {
+                    $line1 .= ($line1 ? ' ' : '') . $word;
+                } else {
+                    $switch_to_line2 = true;
+                    $line2 .= ($line2 ? ' ' : '') . $word;
+                }
+            }
+            
+            $pdf->SetY(125);
+            $pdf->Cell(0, 10, '"' . trim($line1) . '"', 0, 1, 'C');
+            if (!empty($line2)) {
+                $pdf->Cell(0, 10, '"' . trim($line2) . '"', 0, 1, 'C');
+            }
+        } else {
+            $pdf->SetY(125);
+            $pdf->Cell(0, 10, '"' . $lecture_title . '"', 0, 1, 'C');
+        }
+        
+        // 👨‍🏫 Palestrante e duração
+        $pdf->SetFont('helvetica', '', 14);
+        $pdf->SetTextColor($black_color[0], $black_color[1], $black_color[2]);
+        $pdf->SetY(150);
+        
+        $duration_hours = $certificate_data['duration_minutes'] / 60;
+        if ($duration_hours <= 0.5) {
+            $duration_text = '0.5h';
+        } elseif ($duration_hours <= 1.0) {
+            $duration_text = '1.0h';
+        } elseif ($duration_hours <= 1.5) {
+            $duration_text = '1.5h';
+        } else {
+            $duration_text = ceil($duration_hours * 2) / 2 . 'h';
+        }
+        
+        $pdf->Cell(0, 8, 'ministrada por ' . $certificate_data['speaker_name'] . ' com carga horária de ' . $duration_text, 0, 1, 'C');
+        
+        // 📅 Data de emissão (posição similar ao PNG)
+        $pdf->SetFont('helvetica', '', 12);
+        $pdf->SetY(175);
+        $pdf->Cell(0, 6, 'Emitido em ' . date('d/m/Y'), 0, 1, 'C');
+        
+        // 🆔 ID do certificado (posição similar ao PNG)
+        $pdf->SetTextColor($red_color[0], $red_color[1], $red_color[2]);
+        $pdf->SetFont('helvetica', '', 8);
+        $pdf->SetY(185);
+        $pdf->Cell(0, 4, 'ID: ' . $certificate_id, 0, 1, 'C');
+        
+        // 📱 QR Code (posição similar ao PNG - canto inferior direito)
+        if (file_exists(__DIR__ . '/../qr_generator.php')) {
+            require_once __DIR__ . '/../qr_generator.php';
+            $verification_url = generateVerificationURL($certificate_id);
+            $qr_result = generateQRCode($verification_url, 120);
+            
+            if ($qr_result['success']) {
+                // Criar arquivo temporário para o QR code
+                $temp_qr = tempnam(sys_get_temp_dir(), 'qr_') . '.png';
+                file_put_contents($temp_qr, $qr_result['data']);
+                
+                // Adicionar QR code no canto inferior direito (similar ao PNG)
+                $pdf->Image($temp_qr, 245, 155, 35, 35, 'PNG');
+                
+                // Limpar arquivo temporário
+                @unlink($temp_qr);
+                
+                $logger("DEBUG: [$log_prefix] QR Code T101 adicionado ao PDF");
+            }
+        }
+        
+        // Salvar PDF
+        $cert_dir = __DIR__ . '/../certificates';
+        if (!is_dir($cert_dir)) {
+            mkdir($cert_dir, 0755, true);
+        }
+        
+        $pdf_filename = 'certificate_' . $certificate_id . '.pdf';
+        $pdf_path = $cert_dir . '/' . $pdf_filename;
+        
+        $pdf->Output($pdf_path, 'F');
+        
+        $logger("SUCESSO: [$log_prefix] PDF T101 gerado em: $pdf_path");
+        return $pdf_path;
+        
+    } catch (Exception $e) {
+        $logger("ERRO: [$log_prefix] Erro na geração PDF T101: " . $e->getMessage());
+        return false;
+    }
+}
+
+/**
+ * Fallback: Converte PNG T101 existente para PDF
+ */
+function generatePDFFromPNG($certificate_id, $certificate_data, $log_prefix, $logger) {
+    $logger("DEBUG: [$log_prefix] Usando fallback PNG T101 -> PDF");
+    
+    // Verificar se PNG T101 existe
+    $png_path = __DIR__ . '/../certificates/certificate_' . $certificate_id . '.png';
+    if (!file_exists($png_path)) {
+        $logger("ERRO: [$log_prefix] PNG T101 não encontrado para conversão: $png_path");
+        return false;
+    }
+    
+    try {
+        // Usar Imagick se disponível (melhor qualidade)
+        if (extension_loaded('imagick')) {
+            $imagick = new Imagick($png_path);
+            $imagick->setImageFormat('pdf');
+            $imagick->setImageResolution(300, 300);
+            
+            $pdf_path = __DIR__ . '/../certificates/certificate_' . $certificate_id . '.pdf';
+            $imagick->writeImage($pdf_path);
+            $imagick->clear();
+            
+            $logger("SUCESSO: [$log_prefix] PDF gerado via Imagick do PNG T101: $pdf_path");
+            return $pdf_path;
+        }
+        
+        $logger("AVISO: [$log_prefix] Imagick não disponível - PDF não gerado");
+        return false;
+        
+    } catch (Exception $e) {
+        $logger("ERRO: [$log_prefix] Exceção no fallback PNG T101 -> PDF: " . $e->getMessage());
+        return false;
+    }
+}

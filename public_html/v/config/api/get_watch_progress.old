@@ -1,0 +1,87 @@
+<?php
+session_start();
+require_once __DIR__ . '/../config/database.php';
+
+header('Content-Type: application/json');
+header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Methods: POST');
+header('Access-Control-Allow-Headers: Content-Type');
+
+$response = ['success' => false, 'message' => '', 'data' => null];
+
+// Verificar autenticação
+if (!isset($_SESSION['user_id'])) {
+    $response['message'] = 'Usuário não autenticado.';
+    echo json_encode($response);
+    exit;
+}
+
+$raw_input = file_get_contents('php://input');
+$input = json_decode($raw_input, true);
+
+$lecture_id = $input['lecture_id'] ?? null;
+$user_id = $input['user_id'] ?? null;
+
+// Validação
+if (empty($lecture_id) || empty($user_id) || $user_id !== $_SESSION['user_id']) {
+    $response['message'] = 'Dados inválidos.';
+    echo json_encode($response);
+    exit;
+}
+
+try {
+    // Buscar título da palestra
+    $stmt = $pdo->prepare("SELECT title FROM lectures WHERE id = ?");
+    $stmt->execute([$lecture_id]);
+    $lecture = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$lecture) {
+        $response['message'] = 'Palestra não encontrada.';
+        echo json_encode($response);
+        exit;
+    }
+
+    // Buscar progresso do usuário
+    $stmt_progress = $pdo->prepare("
+        SELECT last_watched_seconds, accumulated_watch_time, watch_sessions, 
+               skip_count, watch_segments, created_at, updated_at
+        FROM access_logs 
+        WHERE user_id = ? AND resource = ? AND action = 'view_lecture'
+    ");
+    $stmt_progress->execute([$user_id, $lecture['title']]);
+    $progress = $stmt_progress->fetch(PDO::FETCH_ASSOC);
+
+    if ($progress) {
+        $response['success'] = true;
+        $response['data'] = [
+            'last_position' => (int)$progress['last_watched_seconds'],
+            'accumulated_time' => (int)$progress['accumulated_watch_time'],
+            'watch_sessions' => (int)$progress['watch_sessions'],
+            'skip_count' => (int)$progress['skip_count'],
+            'watch_segments' => json_decode($progress['watch_segments'] ?? '[]', true),
+            'first_watch' => $progress['created_at'],
+            'last_update' => $progress['updated_at']
+        ];
+        $response['message'] = 'Progresso encontrado.';
+    } else {
+        $response['success'] = true;
+        $response['data'] = [
+            'last_position' => 0,
+            'accumulated_time' => 0,
+            'watch_sessions' => 0,
+            'skip_count' => 0,
+            'watch_segments' => [],
+            'first_watch' => null,
+            'last_update' => null
+        ];
+        $response['message'] = 'Nenhum progresso encontrado.';
+    }
+
+} catch (PDOException $e) {
+    $response['message'] = 'Erro no banco de dados: ' . $e->getMessage();
+} catch (Exception $e) {
+    $response['message'] = 'Erro inesperado: ' . $e->getMessage();
+}
+
+echo json_encode($response);
+?>

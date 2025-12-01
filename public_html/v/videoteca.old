@@ -1,0 +1,547 @@
+<?php
+// Inicia a sessao para gerenciar o estado do usuario (login, etc.)
+session_start();
+// Inclui o arquivo de configuracao do banco de dados
+require_once __DIR__ . '/../config/database.php';
+
+// Verifica se o usuario tem permissao para acessar a videoteca.
+// Se a funcao 'hasVideotecaAccess' nao existir ou retornar false,
+// o usuario e redirecionado para a pagina inicial.
+if (!function_exists('hasVideotecaAccess') || !hasVideotecaAccess()) {
+    header('Location: /index.php');
+    exit;
+}
+
+// Define o titulo e a descricao para a pagina, usados na meta tags e no cabecalho
+$page_title = 'Videoteca - Translators101';
+$page_description = 'Explore nossa biblioteca de palestras especializadas em traducao e interpretacao';
+
+// Obtem os parametros de busca e filtros da URL (metodo GET).
+// Se nao estiverem presentes, usa valores padrao.
+$search = $_GET['search'] ?? '';         // Termo de busca
+$category = $_GET['category'] ?? '';     // Categoria selecionada
+$sort_order = $_GET['sort'] ?? 'season_desc'; // Criterio de ordenacao (MODIFICADO: padrao agora e temporada decrescente)
+
+// Inicializa a consulta SQL principal para selecionar todas as palestras.
+// O 'WHERE 1=1' e um truque comum para facilitar a adicao de clausulas WHERE condicionais.
+$sql = 'SELECT * FROM lectures WHERE 1=1';
+$params = []; // Array para armazenar os parametros da consulta preparada, prevenindo injecao SQL
+
+// Adiciona a clausula WHERE para filtrar por termo de busca, se o campo 'search' nao estiver vazio.
+if (!empty($search)) {
+    // Busca por titulo, palestrante ou descricao que contenham o termo de busca.
+    $sql .= ' AND (title LIKE ? OR speaker LIKE ? OR description LIKE ?)';
+    $searchTerm = "%$search%"; // Adiciona curingas '%' para busca parcial
+    $params[] = $searchTerm;
+    $params[] = $searchTerm;
+    $params[] = $searchTerm;
+}
+
+// Adiciona a clausula WHERE para filtrar por categoria, se uma categoria for selecionada.
+if (!empty($category)) {
+    $sql .= ' AND category = ?';
+    $params[] = $category;
+}
+
+// Executa a consulta SQL para buscar as palestras.
+try {
+    $stmt = $pdo->prepare($sql); // Prepara a consulta SQL
+    $stmt->execute($params);    // Executa a consulta com os parametros
+    $lectures = $stmt->fetchAll(); // Obtem todos os resultados como um array associativo
+} catch (Exception $e) {
+    // Em caso de erro na consulta, retorna um array vazio para evitar erros subsequentes
+    $lectures = [];
+    // Em um ambiente de producao, voce registraria este erro em um log em vez de apenas esvaziar o array.
+    // error_log('Erro na consulta de palestras: ' . $e->getMessage());
+}
+
+// Busca as categorias unicas das palestras para popular o dropdown de filtro.
+try {
+    // Seleciona categorias distintas, ignorando nulas ou vazias, e ordena alfabeticamente.
+    $stmt = $pdo->prepare('SELECT DISTINCT category FROM lectures WHERE category IS NOT NULL AND category != \'\' ORDER BY category');
+    $stmt->execute();
+    $categories = $stmt->fetchAll(PDO::FETCH_COLUMN); // Obtem apenas os valores da coluna 'category'
+} catch (Exception $e) {
+    // Em caso de erro na busca de categorias, usa um array de categorias padrao
+    $categories = ['Traducao', 'Interpretacao', 'Linguas', 'Tecnologia', 'Negocios'];
+    // error_log('Erro na consulta de categorias: ' . $e->getMessage());
+}
+
+/**
+ * Extrai informacoes de temporada e episodio de um titulo usando expressao regular.
+ * Espera um formato como 'S01E01' (case-insensitive).
+ *
+ * @param string $title O titulo da palestra.
+ * @return array Um array contendo 'season', 'episode', e 'has_pattern'.
+ */
+function extractSeasonEpisode($title) {
+    // Busca por 'S' seguido de um ou mais digitos, 'E' seguido de um ou mais digitos.
+    if (preg_match('/S(\d+)E(\d+)/i', $title, $matches)) {
+        return [
+            'season' => (int)$matches[1], // Converte para inteiro
+            'episode' => (int)$matches[2], // Converte para inteiro
+            'has_pattern' => true // Indica que o padrao foi encontrado
+        ];
+    }
+    // Retorna valores padrao se o padrao nao for encontrado
+    return ['season' => 0, 'episode' => 0, 'has_pattern' => false];
+}
+
+/**
+ * Ordena um array de palestras com base em diferentes criterios.
+ * Separa palestras que seguem o padrao SXXEXX de outras para ordenacao.
+ *
+ * @param array $lectures O array de palestras a ser ordenado.
+ * @param string $sort_order O criterio de ordenacao ('season_asc', 'season_desc', etc.).
+ * @return array O array de palestras ordenado.
+ */
+function sortLectures($lectures, $sort_order) {
+    $withPattern = [];    // Palestras com padrao SXXEXX
+    $withoutPattern = []; // Palestras sem o padrao SXXEXX
+    
+    // Itera sobre todas as palestras para separa-las
+    foreach ($lectures as $lecture) {
+        $seasonEpisode = extractSeasonEpisode($lecture['title']);
+        if ($seasonEpisode['has_pattern']) {
+            // Adiciona as informacoes de temporada e episodio ao array da palestra
+            $lecture['season'] = $seasonEpisode['season'];
+            $lecture['episode'] = $seasonEpisode['episode'];
+            $withPattern[] = $lecture;
+        } else {
+            $withoutPattern[] = $lecture;
+        }
+    }
+    
+    // Aplica a ordenacao com base no $sort_order
+    switch ($sort_order) {
+        case 'season_asc': // Temporada crescente (e episodio crescente dentro da mesma temporada)
+            usort($withPattern, function($a, $b) {
+                if ($a['season'] != $b['season']) {
+                    return $a['season'] - $b['season']; // Ordena por temporada
+                }
+                return $a['episode'] - $b['episode']; // Ordena por episodio se a temporada for a mesma
+            });
+            // Ordena as palestras sem padrao alfabeticamente
+            usort($withoutPattern, function($a, $b) {
+                return strcmp($a['title'], $b['title']);
+            });
+            // Combina as listas, com as palestras numeradas vindo primeiro
+            return array_merge($withPattern, $withoutPattern);
+            
+        case 'season_desc': // Temporada decrescente
+            usort($withPattern, function($a, $b) {
+                if ($a['season'] != $b['season']) {
+                    return $b['season'] - $a['season']; // Ordem decrescente de temporada
+                }
+                return $b['episode'] - $a['episode']; // Ordem decrescente de episodio
+            });
+            usort($withoutPattern, function($a, $b) {
+                return strcmp($b['title'], $a['title']); // Ordem alfabetica decrescente
+            });
+            return array_merge($withPattern, $withoutPattern);
+            
+        case 'alpha_asc': // Ordem alfabetica crescente
+            $all = array_merge($withPattern, $withoutPattern); // Combina ambas as listas
+            usort($all, function($a, $b) {
+                return strcmp($a['title'], $b['title']); // Ordena pelo titulo
+            });
+            return $all;
+            
+        case 'alpha_desc': // Ordem alfabetica decrescente
+            $all = array_merge($withPattern, $withoutPattern);
+            usort($all, function($a, $b) {
+                return strcmp($b['title'], $a['title']); // Ordena pelo titulo em ordem reversa
+            });
+            return $all;
+            
+        case 'date_asc': // Ordena por data de criacao (mais antigas primeiro)
+            $all = array_merge($withPattern, $withoutPattern);
+            usort($all, function($a, $b) {
+                // Converte datas para timestamp para comparacao numerica
+                return strtotime($a['created_at']) - strtotime($b['created_at']);
+            });
+            return $all;
+            
+        case 'date_desc': // Ordena por data de criacao (mais recentes primeiro)
+            $all = array_merge($withPattern, $withoutPattern);
+            usort($all, function($a, $b) {
+                return strtotime($b['created_at']) - strtotime($a['created_at']);
+            });
+            return $all;
+            
+        default: // Caso padrao, retorna as palestras na ordem em que foram encontradas, com as numeradas primeiro
+            return array_merge($withPattern, $withoutPattern);
+    }
+}
+
+// Aplica a funcao de ordenacao ao array de palestras
+$lectures = sortLectures($lectures, $sort_order);
+
+// Inclui o cabecalho da pagina (head, meta tags, etc.)
+include __DIR__ . '/vision/includes/head.php';
+?>
+
+<!-- Estilos CSS especificos para a pagina da Videoteca -->
+<style>
+/* Estilos especificos para o layout da Videoteca */
+.videoteca-title {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    justify-content: center; /* Centraliza o titulo */
+}
+
+.videoteca-filtros {
+    margin-bottom: 30px;
+    background: var(--glass-bg); /* Usa variavel de background com efeito vidro */
+    backdrop-filter: blur(20px); /* Aplica blur com efeito vidro */
+    border: 1px solid var(--glass-border); /* Usa variavel de borda com efeito vidro */
+    border-radius: 16px;
+    padding: 24px;
+}
+
+.filtros-grid-improved {
+    display: grid;
+    grid-template-columns: 2fr 1.2fr 1.2fr auto; /* Define o layout do grid para os filtros */
+    gap: 20px;
+    align-items: end;
+}
+
+/* Ajustes responsivos para telas menores */
+@media (max-width: 900px) {
+    .filtros-grid-improved {
+        grid-template-columns: 1fr; /* Coluna unica em telas menores */
+    }
+}
+
+.search-field-expanded {
+    display: flex;
+    flex-direction: column;
+}
+
+.search-input-large,
+.category-select,
+.sort-select {
+    width: 100%;
+    padding: 12px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.3); /* Estilo de borda semi-transparente */
+    background: rgba(255, 255, 255, 0.18); /* Estilo de background semi-transparente */
+    color: #ffffff; /* Cor do texto */
+    font-size: 1rem;
+    font-weight: 600;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6); /* Sombra de texto para legibilidade */
+}
+
+.search-btn-container {
+    display: flex;
+    align-items: end; /* Alinha o botao na parte inferior */
+}
+
+.search-btn {
+    white-space: nowrap; /* Impede que o texto do botao quebre linha */
+    padding: 12px 20px;
+    height: fit-content; /* Ajusta a altura do botao ao conteudo */
+}
+
+/* Grid de videos com 4 colunas */
+.video-grid-four {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr); /* 4 colunas de tamanho igual */
+    gap: 25px; /* Espaco entre os itens do grid */
+    margin-bottom: 40px;
+    max-width: 100%;
+}
+
+/* Container para manter a proporcao 16:9 dos videos */
+.video-thumb-container {
+    position: relative;
+    width: 100%;
+    padding-bottom: 56.25%; /* 16:9 aspect ratio */
+    overflow: hidden; /* Esconde o que transborda */
+    background: linear-gradient(135deg, var(--brand-purple), #5e3370); /* Gradiente de fundo */
+}
+.video-thumb {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%; /* Ocupa todo o espaco do container pai */
+  background: linear-gradient(135deg, var(--brand-purple), #5e3370);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.video-image {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover; /* A imagem preenche o container, cortando o excesso */
+    object-position: center; /* Centraliza a imagem */
+    display: block; /* Remove espaco extra abaixo da imagem */
+}
+
+.video-card:hover {
+    transform: translateY(-8px); /* Efeito de elevacao ao passar o mouse */
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3); /* Sombra mais pronunciada */
+    border-color: var(--brand-purple); /* Muda a cor da borda */
+}
+
+.video-info h3 {
+    font-size: 1rem;
+    line-height: 1.3;
+}
+
+.video-speaker {
+    font-size: 0.95rem;
+}
+
+.video-desc {
+    font-size: 0.8rem;
+    line-height: 1.4;
+}
+
+.video-meta {
+    font-size: 0.8rem;
+}
+
+/* MODIFICADO: Estilo melhorado para o indicador "Destaque" com maior contraste */
+.featured-tag {
+    background: linear-gradient(135deg, #ff6b35, #f7931e) !important; /* Gradiente laranja vibrante */
+    color: #ffffff !important; /* Texto branco para contraste */
+    border: 2px solid #ff4500 !important; /* Borda laranja escura */
+    font-weight: 700 !important; /* Texto mais espesso */
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.7) !important; /* Sombra no texto para legibilidade */
+    box-shadow: 0 2px 8px rgba(255, 107, 53, 0.4) !important; /* Sombra colorida */
+    text-transform: capitalize !important; /* Primeira letra maiúscula */
+}
+
+.featured-tag:hover {
+    background: linear-gradient(135deg, #ff4500, #ff6b35) !important; /* Efeito hover mais escuro */
+    transform: scale(1.05) !important; /* Leve aumento no hover */
+    box-shadow: 0 4px 12px rgba(255, 107, 53, 0.6) !important; /* Sombra mais intensa no hover */
+}
+
+/* MODIFICADO: Estilo melhorado para o indicador de categoria com maior contraste */
+.video-category {
+    background: linear-gradient(135deg, #2563eb, #1d4ed8) !important; /* Gradiente azul vibrante */
+    color: #ffffff !important; /* Texto branco para contraste */
+    padding: 4px 12px !important; /* Espacamento interno igual ao destaque */
+    border-radius: 12px !important; /* Bordas bem arredondadas igual ao destaque */
+    border: 2px solid #1e40af !important; /* Borda azul escura */
+    font-size: 0.75rem !important; /* Tamanho da fonte */
+    font-weight: 700 !important; /* Texto mais espesso igual ao destaque */
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.7) !important; /* Sombra no texto para legibilidade */
+    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.4) !important; /* Sombra colorida */
+    display: inline-block !important; /* Exibicao em linha */
+    margin-bottom: 8px !important; /* Espacamento inferior */
+    text-transform: capitalize !important; /* Primeira letra maiúscula */
+}
+
+/* Ajustes responsivos para o grid de videos */
+@media (max-width: 1400px) {
+    .video-grid-four {
+        grid-template-columns: repeat(3, 1fr); /* 3 colunas */
+    }
+}
+
+@media (max-width: 1200px) {
+    .video-grid-four {
+        grid-template-columns: repeat(2, 1fr); /* 2 colunas */
+    }
+}
+
+@media (max-width: 768px) {
+    .video-grid-four {
+        grid-template-columns: 1fr; /* 1 coluna */
+    }
+}
+</style>
+
+<?php
+// Inclui o cabecalho principal da aplicacao (menu, navegacao, etc.)
+include __DIR__ . '/vision/includes/header.php';
+// Inclui a barra lateral (se houver)
+include __DIR__ . '/vision/includes/sidebar.php';
+?>
+
+<!-- Conteudo principal da pagina -->
+<div class="main-content">
+    <!-- Secao Hero -->
+    <div class="glass-hero">
+        <div class="hero-content" style="text-align: center;">
+            <h1 class="videoteca-title">
+                <i class="fas fa-video"></i>
+                Videoteca
+            </h1>
+            <p>Explore nossa biblioteca de palestras especializadas em traducao e interpretacao</p>
+        </div>
+    </div>
+
+    <!-- Secao de Filtros -->
+    <div class="videoteca-filtros">
+        <!-- Formulario para aplicar filtros de busca -->
+        <form method="GET" action="" class="filtros-form">
+            <div class="filtros-grid-improved">
+                <!-- Campo de Busca -->
+                <div class="search-field-expanded">
+                    <label class="form-label">Buscar por palavra-chave</label>
+                    <input type="text" 
+                           name="search" 
+                           value="<?php echo htmlspecialchars($search); ?>" 
+                           placeholder="Digite o titulo, palestrante ou descricao..."
+                           class="search-input-large">
+                </div>
+                
+                <!-- Campo de Categoria -->
+                <div class="category-field">
+                    <label class="form-label">Categoria</label>
+                    <select name="category" class="category-select">
+                        <option value="">Todas as categorias</option>
+                        <?php foreach ($categories as $cat): ?>
+                            <option value="<?php echo htmlspecialchars($cat); ?>" 
+                                    <?php echo ($category === $cat) ? 'selected' : ''; ?>>
+                                <?php echo htmlspecialchars($cat); ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                
+                <!-- Campo de Ordenacao - MODIFICADO: opcao "Mais recentes" como primeira e padrao selecionado -->
+                <div class="sort-field">
+                    <label class="form-label">Ordenar por</label>
+                    <select name="sort" class="sort-select">
+                        <option value="season_desc" <?php echo ($sort_order === 'season_desc') ? 'selected' : ''; ?>>Temporada (decrescente)</option>
+                        <option value="season_asc" <?php echo ($sort_order === 'season_asc') ? 'selected' : ''; ?>>Temporada (crescente)</option>
+                        <option value="date_desc" <?php echo ($sort_order === 'date_desc') ? 'selected' : ''; ?>>Mais recentes</option>
+                        <option value="date_asc" <?php echo ($sort_order === 'date_asc') ? 'selected' : ''; ?>>Mais antigas</option>
+                        <option value="alpha_asc" <?php echo ($sort_order === 'alpha_asc') ? 'selected' : ''; ?>>Alfabetica (A-Z)</option>
+                        <option value="alpha_desc" <?php echo ($sort_order === 'alpha_desc') ? 'selected' : ''; ?>>Alfabetica (Z-A)</option>
+                    </select>
+                </div>
+                
+                <!-- Botao de Busca -->
+                <div class="search-btn-container">
+                    <button type="submit" class="cta-btn search-btn">
+                        <i class="fas fa-search"></i>
+                        Buscar
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- Secao de Administracao (visivel apenas para administradores) -->
+    <?php if (function_exists('isAdmin') && isAdmin()): ?>
+    <div class="admin-section">
+        <div class="video-card">
+            <h3><i class="fas fa-cog"></i> Administracao</h3>
+            <div class="admin-actions">
+                <a href="/admin/palestras.php" class="cta-btn admin-btn">
+                    <i class="fas fa-plus"></i> Gerenciar palestras
+                </a>
+            </div>
+        </div>
+    </div>
+    <?php endif; ?>
+
+    <!-- Exibe a lista de palestras se houver resultados -->
+    <?php if (!empty($lectures)): ?>
+        <div class="video-grid video-grid-four">
+            <?php 
+            // REMOVIDO: O codigo que identificava a palestra mais recente para o badge "NOVA" foi removido
+            foreach ($lectures as $index => $lecture): 
+            ?>
+                <!-- Card de cada palestra -->
+                <div class="video-card" onclick="location.href='/palestra.php?id=<?php echo $lecture['id']; ?>'">
+                    <!-- Container do thumbnail -->
+                    <div class="video-thumb-container">
+                        <div class="video-thumb">
+                            <!-- Exibe o thumbnail se disponivel -->
+                            <?php if (!empty($lecture['thumbnail_url'])): ?>
+                                <img src="<?php echo htmlspecialchars($lecture['thumbnail_url']); ?>" 
+                                     alt="<?php echo htmlspecialchars($lecture['title']); ?>"
+                                     class="video-image">
+                            <?php else: ?>
+                                <!-- Placeholder se nao houver thumbnail -->
+                                <div class="video-placeholder">
+                                    <i class="fas fa-video placeholder-icon"></i>
+                                    <span class="placeholder-text">Palestra</span>
+                                </div>
+                            <?php endif; ?>
+                            
+                            <!-- REMOVIDO: Badge "NOVA" foi completamente removido -->
+                            
+                            <!-- Overlay com botao de play -->
+                            <div class="video-overlay">
+                                <div class="play-button">
+                                    <i class="fas fa-play"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Informacoes da palestra -->
+                    <div class="video-info">
+                        <h3><?php echo htmlspecialchars($lecture['title']); ?></h3>
+                        
+                        <?php if (!empty($lecture['speaker'])): ?>
+                            <div class="video-speaker"><?php echo htmlspecialchars($lecture['speaker']); ?></div>
+                        <?php endif; ?>
+                        
+                        <?php if (!empty($lecture['description'])): ?>
+                            <p class="video-desc"><?php echo htmlspecialchars(substr($lecture['description'], 0, 100)); ?>...</p>
+                        <?php endif; ?>
+                        
+                        <div class="video-meta">
+                            <?php if (!empty($lecture['category'])): ?>
+                                <div class="video-category">
+                                    <?php echo htmlspecialchars($lecture['category']); ?>
+                                </div>
+                            <?php endif; ?>
+                            
+                            <?php if (!empty($lecture['duration_minutes'])): ?>
+                                <div class="video-duration">
+                                    <i class="fas fa-clock"></i>
+                                    <?php echo $lecture['duration_minutes']; ?>min
+                                </div>
+                            <?php endif; ?>
+                        </div>
+                        
+                        <!-- Indicador de palestra destacada - MANTIDO mas com estilo melhorado -->
+                        <?php if (!empty($lecture['is_featured']) && $lecture['is_featured']): ?>
+                            <div class="featured-section">
+                                <span class="tag featured-tag">
+                                    <i class="fas fa-star"></i> Destaque
+                                </span>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            <?php endforeach; ?>
+        </div>
+    <?php else: ?>
+        <!-- Estado vazio se nao houver palestras encontradas -->
+        <div class="empty-state">
+            <div class="empty-icon">
+                <i class="fas fa-search"></i>
+            </div>
+            <h2 class="empty-title">Nenhuma palestra encontrada</h2>
+            <p class="empty-description">
+                Tente ajustar os filtros de busca ou escolher uma categoria diferente.
+            </p>
+            <a href="?search=&category=&sort=season_desc" class="cta-btn">
+                <i class="fas fa-refresh"></i>
+                Limpar filtros
+            </a>
+        </div>
+    <?php endif; ?>
+</div>
+
+<?php
+// Inclui o rodape da pagina
+include __DIR__ . '/vision/includes/footer.php';
+?>

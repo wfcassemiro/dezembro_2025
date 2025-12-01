@@ -1,0 +1,61 @@
+<?php
+session_start();
+require_once 'config/database.php';
+
+// Verificar se o usuário está logado
+if (!isSubscriber()) {
+    header('Location: /login.php');
+    exit;
+}
+
+$certificate_id = $_GET['id'] ?? '';
+$user_id = $_SESSION['user_id'];
+
+if (empty($certificate_id)) {
+    die('ID do certificado não fornecido.');
+}
+
+try {
+    // Verificar se o certificado pertence ao usuário
+    $stmt = $pdo->prepare("SELECT * FROM certificates WHERE id = ? AND user_id = ?");
+    $stmt->execute([$certificate_id, $user_id]);
+    $certificate = $stmt->fetch();
+    
+    if (!$certificate) {
+        die('Certificado não encontrado ou não autorizado.');
+    }
+    
+    // Tentar baixar PDF primeiro (preferência para download)
+    $pdf_path = __DIR__ . '/certificates/certificate_' . $certificate_id . '.pdf';
+    $png_path = __DIR__ . '/certificates/certificate_' . $certificate_id . '.png';
+    
+    if (file_exists($pdf_path)) {
+        // Download do PDF
+        header('Content-Type: application/pdf');
+        header('Content-Disposition: attachment; filename="Certificado_T101_' . preg_replace('/[^a-zA-Z0-9_-]/', '_', $certificate['user_name']) . '_' . date('Y-m-d') . '.pdf"');
+        header('Content-Length: ' . filesize($pdf_path));
+        header('Cache-Control: private, max-age=0, must-revalidate');
+        header('Pragma: public');
+        
+        readfile($pdf_path);
+        exit;
+        
+    } elseif (file_exists($png_path)) {
+        // Fallback para PNG se PDF não existir
+        header('Content-Type: image/png');
+        header('Content-Disposition: attachment; filename="Certificado_T101_' . preg_replace('/[^a-zA-Z0-9_-]/', '_', $certificate['user_name']) . '_' . date('Y-m-d') . '.png"');
+        header('Content-Length: ' . filesize($png_path));
+        header('Cache-Control: private, max-age=0, must-revalidate');
+        header('Pragma: public');
+        
+        readfile($png_path);
+        exit;
+        
+    } else {
+        // Nenhum arquivo encontrado - gerar novamente ou mostrar erro
+        die('Arquivo do certificado não encontrado. Contate o suporte.');
+    }
+    
+} catch (Exception $e) {
+    die('Erro ao processar download: ' . $e->getMessage());
+}

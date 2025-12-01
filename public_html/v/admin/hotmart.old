@@ -1,0 +1,250 @@
+<?php
+session_start();
+require_once __DIR__ . '/../config/database.php';
+
+// Verificar se é admin
+if (!isset($_SESSION['user_id']) || !isset($_SESSION['is_admin']) || !$_SESSION['is_admin']) {
+    header('Location: /login.php');
+    exit;
+}
+
+$page_title = 'Integração Hotmart - Admin';
+$message = '';
+$error = '';
+$sync_details = []; // Array para o relatório visual
+
+// Processar sincronização com API da Hotmart
+if (isset($_POST['sync_hotmart'])) {
+    try {
+        $sync_result = syncWithHotmart();
+        if ($sync_result['success']) {
+            $message = 'Sincronização realizada com sucesso! ' . $sync_result['message'];
+            $sync_details = $sync_result['details'] ?? [];
+        } else {
+            $error = 'Erro na sincronização: ' . $sync_result['message'];
+        }
+    } catch (Exception $e) {
+        $error = 'Erro durante a sincronização: ' . $e->getMessage();
+    }
+}
+
+// Função para sincronizar com Hotmart
+function syncWithHotmart() {
+    global $pdo;
+    
+    $processed_users = [];
+    
+    // Carregar configurações (Usando include para garantir retorno do array mesmo se já carregado)
+    $config = include __DIR__ . '/../config/hotmart_config.php';
+    
+    if (!is_array($config)) {
+        return ['success' => false, 'message' => 'Erro ao carregar configurações da Hotmart.'];
+    }
+    
+    $client_id = $config['api']['client_id'];
+    $client_secret = $config['api']['client_secret'];
+    $basic_token = $config['api']['basic_token'];
+    $auth_url = $config['api']['auth_url'];
+    $sales_url = $config['api']['sales_url'];
+    $days_to_sync = 7; // Sincronizar últimos 7 dias
+
+    // 1. Obter Token de Acesso (Método idêntico ao arquivo original)
+    $ch = curl_init();
+    $auth_full_url = $auth_url . '?grant_type=client_credentials&client_id=' . $client_id . '&client_secret=' . $client_secret;
+    
+    curl_setopt($ch, CURLOPT_URL, $auth_full_url);
+    curl_setopt($ch, CURLOPT_POST, 1);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'Content-Type: application/json',
+        'Authorization: Basic ' . $basic_token
+    ]);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    
+    $response = curl_exec($ch);
+    $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($http_code !== 200) {
+        return ['success' => false, 'message' => "Falha na autenticação Hotmart. Código: $http_code. Resposta: $response"];
+    }
+
+    $auth_data = json_decode($response, true);
+    if (!isset($auth_data['access_token'])) {
+        return ['success' => false, 'message' => 'Token de acesso não retornado.'];
+    }
+    
+    $access_token = $auth_data['access_token'];
+
+    // 2. Buscar Vendas (Histórico)
+    $start_date = strtotime("-{$days_to_sync} days") * 1000;
+    $end_date = time() * 1000;
+    
+    // URL concatenada manualmente como no original
+    $url = $sales_url . "?transaction_status=APPROVED&transaction_status=COMPLETE&start_date=$start_date&end_date=$end_date&max_results=100";
+
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $url);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'Content-Type: application/json',
+        'Authorization: Bearer ' . $access_token
+    ]);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    
+    $sales_response = curl_exec($ch);
+    $sales_data = json_decode($sales_response, true);
+    curl_close($ch);
+
+    if (!isset($sales_data['items'])) {
+        // Se a resposta for válida mas sem itens, não é erro
+        return ['success' => true, 'message' => 'Nenhuma venda encontrada no período.', 'details' => []];
+    }
+
+    // 3. Processar Usuários
+    $count_new = 0;
+
+    foreach ($sales_data['items'] as $sale) {
+        if (!isset($sale['buyer']['email']) || !isset($sale['buyer']['name'])) continue;
+
+        $buyer = $sale['buyer'];
+        $email = $buyer['email'];
+        $name = $buyer['name'];
+        
+        $status_log = '';
+        $user_id_db = null;
+
+        try {
+            // Verificar se usuário existe
+            $stmt = $pdo->prepare("SELECT id FROM users WHERE email = ?");
+            $stmt->execute([$email]);
+            $existing_user = $stmt->fetch();
+
+            if ($existing_user) {
+                $user_id_db = $existing_user['id'];
+                $status_log = '<span style="color: #f39c12; font-weight: 500;">Já registrado</span>';
+                
+                // Opcional: Reativar usuário se estiver inativo
+                // $pdo->prepare("UPDATE users SET is_active = 1 WHERE id = ?")->execute([$user_id_db]);
+                
+            } else {
+                // Criar Novo Usuário
+                $stmt = $pdo->prepare("INSERT INTO users (name, email, role, created_at, is_active) VALUES (?, ?, 'subscriber', NOW(), 1)");
+                $stmt->execute([$name, $email]);
+                $user_id_db = $pdo->lastInsertId();
+                
+                $count_new++;
+                $status_log = '<span style="color: #2ecc71; font-weight: bold;"><i class="fas fa-plus-circle"></i> Novo Usuário</span>';
+            }
+        } catch (Exception $e) {
+            $status_log = '<span style="color: #e74c3c;">Erro: ' . $e->getMessage() . '</span>';
+        }
+
+        // Adiciona ao relatório detalhado
+        $processed_users[] = [
+            'name' => $name,
+            'email' => $email,
+            'status' => $status_log,
+            'id' => $user_id_db
+        ];
+    }
+
+    return [
+        'success' => true, 
+        'message' => "Processamento concluído. Novos usuários: $count_new.",
+        'details' => $processed_users
+    ];
+}
+
+include __DIR__ . '/../vision/includes/head.php';
+include __DIR__ . '/../vision/includes/header.php';
+include __DIR__ . '/../vision/includes/sidebar.php';
+?>
+
+<div class="main-content">
+    <div class="glass-hero">
+        <div class="hero-content">
+            <h1><i class="fas fa-sync-alt"></i> Integração Hotmart</h1>
+            <p>Sincronize usuários e vendas da plataforma Hotmart</p>
+        </div>
+    </div>
+
+    <div class="container-fluid" style="padding: 20px;">
+        
+        <?php if ($message): ?>
+            <div class="alert success" style="background: rgba(46, 204, 113, 0.2); border: 1px solid #2ecc71; color: #2ecc71; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                <i class="fas fa-check-circle"></i> <?php echo $message; ?>
+            </div>
+        <?php endif; ?>
+        
+        <?php if ($error): ?>
+            <div class="alert error" style="background: rgba(231, 76, 60, 0.2); border: 1px solid #e74c3c; color: #e74c3c; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                <i class="fas fa-exclamation-triangle"></i> <?php echo $error; ?>
+            </div>
+        <?php endif; ?>
+
+        <div class="video-card" style="text-align: center; padding: 40px;">
+            <i class="fas fa-cloud-download-alt" style="font-size: 3rem; color: #8e44ad; margin-bottom: 20px;"></i>
+            <h3>Sincronização Manual</h3>
+            <p style="color: #aaa; margin-bottom: 30px;">Busque as vendas aprovadas dos últimos 7 dias e atualize a base de usuários.</p>
+            
+            <form method="post">
+                <button type="submit" name="sync_hotmart" class="cta-btn" style="font-size: 1.1rem; padding: 12px 30px;">
+                    <i class="fas fa-sync"></i> Sincronizar Agora
+                </button>
+            </form>
+        </div>
+
+        <?php if (!empty($sync_details)): ?>
+        <div class="video-card" style="margin-top: 30px;">
+            <h3><i class="fas fa-list"></i> Relatório da Sincronização</h3>
+            <div class="table-responsive">
+                <table class="data-table" style="width: 100%; border-collapse: collapse; margin-top: 15px;">
+                    <thead>
+                        <tr style="background: rgba(255,255,255,0.05); color: #fff;">
+                            <th style="padding: 12px; text-align: left;">Nome</th>
+                            <th style="padding: 12px; text-align: left;">Email</th>
+                            <th style="padding: 12px; text-align: center;">Status</th>
+                            <th style="padding: 12px; text-align: center;">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($sync_details as $user): ?>
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.1);">
+                            <td style="padding: 12px; color: #fff;"><?php echo htmlspecialchars($user['name']); ?></td>
+                            <td style="padding: 12px; color: #ccc;"><?php echo htmlspecialchars($user['email']); ?></td>
+                            <td style="padding: 12px; text-align: center;"><?php echo $user['status']; ?></td>
+                            <td style="padding: 12px; text-align: center;">
+                                <?php if ($user['id']): ?>
+                                    <div style="display: flex; gap: 10px; justify-content: center;">
+                                        <a href="editar_usuario.php?id=<?php echo $user['id']; ?>" class="action-btn edit" title="Editar Usuário" style="color: #3498db; font-size: 1.1rem; text-decoration: none;">
+                                            <i class="fas fa-edit"></i>
+                                        </a>
+                                        
+                                        <a href="gerenciar_senhas.php?search_email=<?php echo urlencode($user['email']); ?>" class="action-btn key" title="Gerar Senha" style="color: #f39c12; font-size: 1.1rem; text-decoration: none;">
+                                            <i class="fas fa-key"></i>
+                                        </a>
+                                    </div>
+                                <?php else: ?>
+                                    <span style="color: #666;">-</span>
+                                <?php endif; ?>
+                            </td>
+                        </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <?php endif; ?>
+
+    </div>
+</div>
+
+<style>
+    .cta-btn {
+        background: #8e44ad; color: #fff; border: none; padding: 10px 20px; border-radius: 30px; cursor: pointer; font-weight: bold; text-decoration: none; transition: 0.3s;
+    }
+    .cta-btn:hover { background: #9b59b6; transform: translateY(-2px); }
+    .action-btn { transition: transform 0.2s; display: inline-block; }
+    .action-btn:hover { transform: scale(1.2); }
+</style>
+
+<?php include __DIR__ . '/../vision/includes/footer.php'; ?>

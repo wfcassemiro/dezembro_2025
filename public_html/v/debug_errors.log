@@ -1,0 +1,80 @@
+[04-Oct-2025 15:42:30 UTC] DEBUG: Script iniciado. Method: GET
+[04-Oct-2025 15:42:30 UTC] DEBUG: Session user_id: debug-user
+[04-Oct-2025 15:42:30 UTC] DEBUG: Session is_admin: 1
+[04-Oct-2025 15:42:30 UTC] DEBUG: Admin verificado, tentando incluir database.php
+[04-Oct-2025 15:42:30 UTC] DEBUG: Encontrado database.php em: /home/u335416710/domains/translators101.com/public_html/v/config/database.php
+[04-Oct-2025 15:42:30 UTC] DEBUG: Database incluído com sucesso
+[04-Oct-2025 15:42:30 UTC] DEBUG: PDO connection verificada
+[04-Oct-2025 15:42:30 UTC] DEBUG: Method: GET
+[04-Oct-2025 15:42:30 UTC] DEBUG: Buscando anúncio com ID: 115faa0d55024b9b9670b82c4c7f9ad4
+[04-Oct-2025 15:42:30 UTC] DEBUG: Tabela upcoming_announcements existe. Colunas: id, title, speaker, announcement_date, description, image_path, is_active, display_order, created_at, updated_at
+[04-Oct-2025 15:42:30 UTC] ERROR: Exception capturada: SQLSTATE[42S22]: Column not found: 1054 Unknown column 'lecture_time' in 'SELECT'
+[04-Oct-2025 15:42:30 UTC] ERROR: Stack trace: #0 /home/u335416710/domains/translators101.com/public_html/v/manage_announcements.php(86): PDO->prepare()
+#1 {main}
+[04-Oct-2025 15:42:30 UTC] DEBUG: Script finalizado
+[04-Oct-2025 15:49:31 UTC] DEBUG: Script iniciado. Method: GET
+[04-Oct-2025 15:49:31 UTC] DEBUG: Session user_id: debug-user
+[04-Oct-2025 15:49:31 UTC] DEBUG: Session is_admin: 1
+[04-Oct-2025 15:49:31 UTC] DEBUG: Admin verificado, tentando incluir database.php
+[04-Oct-2025 15:49:31 UTC] DEBUG: Encontrado database.php em: /home/u335416710/domains/translators101.com/public_html/v/config/database.php
+[04-Oct-2025 15:49:31 UTC] DEBUG: Database incluído com sucesso
+[04-Oct-2025 15:49:31 UTC] DEBUG: PDO connection verificada
+[04-Oct-2025 15:49:31 UTC] DEBUG: Method: GET
+[04-Oct-2025 15:49:31 UTC] DEBUG: Buscando anúncio com ID: 115faa0d55024b9b9670b82c4c7f9ad4
+[04-Oct-2025 15:49:31 UTC] DEBUG: Tabela upcoming_announcements existe. Colunas: id, title, speaker, announcement_date, lecture_time, description, image_path, is_active, display_order, created_at, updated_at
+[04-Oct-2025 15:49:31 UTC] DEBUG: Resultado da query: Array
+(
+    [id] => 115faa0d55024b9b9670b82c4c7f9ad4
+    [title] => Fluência do idioma em dia. Mas como anda sua fluência cultural?
+    [speaker] => Denise Bobadilha
+    [announcement_date] => 2025-10-08
+    [lecture_time] => 19:00:00
+    [description] => Interpretar e traduzir vai além das palavras. Para garantir uma comunicação fluida, é essencial conhecer as dimensões culturais de cada grupo. Isso evita embaraços — engraçados na mesa do bar, mas desastrosos para o cliente.
+    [image_path] => /images/announcements/announcement_68dfdb38ca91f_2025-10-03.png
+)
+
+[04-Oct-2025 15:49:31 UTC] DEBUG: Script finalizado
+[04-Oct-2025 15:49:40 UTC] DEBUG: Script iniciado. Method: GET
+[04-Oct-2025 15:49:40 UTC] DEBUG: Session user_id: debug-user
+[04-Oct-2025 15:49:40 UTC] DEBUG: Session is_admin: 1
+[04-Oct-2025 15:49:40 UTC] DEBUG: Admin verificado, tentando incluir database.php
+[04-Oct-2025 15:49:40 UTC] DEBUG: Encontrado database.php em: /home/u335416710/domains/translators101.com/public_html/v/config/database.php
+[04-Oct-2025 15:49:40 UTC] DEBUG: Database incluído com sucesso
+[04-Oct-2025 15:49:40 UTC] DEBUG: PDO connection verificada
+[04-Oct-2025 15:49:40 UTC] DEBUG: Method: GET
+[04-Oct-2025 15:49:40 UTC] DEBUG: Buscando anúncio com ID: 1ca47719-9b25-11f0-916e-bad1eb27008a
+[04-Oct-2025 15:49:40 UTC] DEBUG: Tabela upcoming_announcements existe. Colunas: id, title, speaker, announcement_date, lecture_time, description, image_path, is_active, display_order, created_at, updated_at
+[04-Oct-2025 15:49:40 UTC] DEBUG: Resultado da query: Array
+(
+    [id] => 1ca47719-9b25-11f0-916e-bad1eb27008a
+    [title] => Tem TDAH, autismo ou altas habilidades? Então, use seus superpoderes na tradução!
+    [speaker] => Jacqueline Plaça
+    [announcement_date] => 2025-10-15
+    [lecture_time] => 19:00:00
+    [description] => Neurodivergência, sobrecarga sensorial, perfeccionismo, burnout. Se essas palavras têm povoado seu cotidiano, provavelmente você é uma pessoa neurodivergente, ou suspeita ser, ou é neurotípica convivendo com atípicas. Ser neurodivergente é sinônimo de ter superpoderes muito potentes! Nessa palestra, vamos entender quais são eles, o que fazer para lidar com tanta potência sem ter um esgotamento, e, o melhor, como trabalhar com outras pessoas na tradução e interpretação cultivando a saúde mental. As palavras mágicas são: neuroplasticidade, hiperfoco, menu de dopamina e body doubling. Quer saber como usá-las, meu querido colecionador de palavras? Vem comigo e te conto no caminho.
+    [image_path] => /images/announcements/announcement_68d7c0a04e750_2025-09-27.png
+)
+
+[04-Oct-2025 15:49:40 UTC] DEBUG: Script finalizado
+[04-Oct-2025 15:49:44 UTC] DEBUG: Script iniciado. Method: GET
+[04-Oct-2025 15:49:44 UTC] DEBUG: Session user_id: debug-user
+[04-Oct-2025 15:49:44 UTC] DEBUG: Session is_admin: 1
+[04-Oct-2025 15:49:44 UTC] DEBUG: Admin verificado, tentando incluir database.php
+[04-Oct-2025 15:49:44 UTC] DEBUG: Encontrado database.php em: /home/u335416710/domains/translators101.com/public_html/v/config/database.php
+[04-Oct-2025 15:49:44 UTC] DEBUG: Database incluído com sucesso
+[04-Oct-2025 15:49:44 UTC] DEBUG: PDO connection verificada
+[04-Oct-2025 15:49:44 UTC] DEBUG: Method: GET
+[04-Oct-2025 15:49:44 UTC] DEBUG: Buscando anúncio com ID: ab97bae7ffb03b5990144c4ff330d6e4
+[04-Oct-2025 15:49:44 UTC] DEBUG: Tabela upcoming_announcements existe. Colunas: id, title, speaker, announcement_date, lecture_time, description, image_path, is_active, display_order, created_at, updated_at
+[04-Oct-2025 15:49:44 UTC] DEBUG: Resultado da query: Array
+(
+    [id] => ab97bae7ffb03b5990144c4ff330d6e4
+    [title] => Neurodiversidade e poliglotismo
+    [speaker] => Erick Gibson e Hewdy Lopes
+    [announcement_date] => 2025-10-18
+    [lecture_time] => 19:00:00
+    [description] => Esta palestra propõe uma reflexão sobre possíveis conexões entre neurodivergência — em especial o Transtorno do Espectro Autista (TEA), o Transtorno do Déficit de Atenção com Hiperatividade (TDAH) e a Alta Habilidade/Superdotação (AHSD) — e o fenômeno do poliglotismo.
+    [image_path] => /images/announcements/announcement_68dfd83cb4c22_2025-10-03.png
+)
+
+[04-Oct-2025 15:49:44 UTC] DEBUG: Script finalizado

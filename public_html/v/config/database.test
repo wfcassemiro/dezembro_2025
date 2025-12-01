@@ -1,0 +1,279 @@
+<?php
+// config/database.php
+
+// Mock database connection for testing environment
+// In production, this would connect to a real MySQL database
+
+// Create a mock PDO object for testing
+class MockPDO {
+    public function prepare($statement) {
+        return new MockPDOStatement();
+    }
+    
+    public function query($statement) {
+        return new MockPDOStatement();
+    }
+    
+    public function exec($statement) {
+        return true;
+    }
+    
+    public function lastInsertId() {
+        return rand(1, 1000);
+    }
+    
+    public function beginTransaction() {
+        return true;
+    }
+    
+    public function commit() {
+        return true;
+    }
+    
+    public function rollback() {
+        return true;
+    }
+}
+
+class MockPDOStatement {
+    private static $mockData = [];
+    private $lastQuery = '';
+    
+    public function execute($params = []) {
+        return true;
+    }
+    
+    public function rowCount() {
+        return 1; // Simular que sempre afeta uma linha
+    }
+    
+    public function fetch($mode = null) {
+        // Simular dados baseados na query
+        $backtrace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 3);
+        $query = '';
+        
+        // Tentar detectar o tipo de query sendo executada
+        foreach ($backtrace as $trace) {
+            if (isset($trace['file']) && isset($trace['line'])) {
+                $file_content = @file($trace['file']);
+                if ($file_content && isset($file_content[$trace['line'] - 1])) {
+                    $line = $file_content[$trace['line'] - 1];
+                    if (strpos($line, 'SELECT') !== false) {
+                        $query = trim($line);
+                        break;
+                    }
+                }
+            }
+        }
+        
+        // Retornar dados mockados baseados no contexto
+        if (strpos($query, 'hotmart_logs') !== false) {
+            return [
+                'id' => rand(1, 1000),
+                'event_type' => 'PURCHASE_COMPLETE',
+                'status' => 'success',
+                'user_email' => 'teste@exemplo.com',
+                'user_name' => 'Usuário Teste',
+                'transaction_id' => 'HP' . rand(100000, 999999),
+                'product_id' => 'PROD001',
+                'product_name' => 'Curso Translators101',
+                'price' => 197.00,
+                'currency' => 'BRL',
+                'hotmart_status' => 'APPROVED',
+                'webhook_data' => '{"event":"PURCHASE_COMPLETE","data":{"buyer":{"email":"teste@exemplo.com","name":"Usuário Teste"}}}',
+                'response_data' => 'Usuário criado com sucesso',
+                'created_at' => date('Y-m-d H:i:s')
+            ];
+        }
+        
+        if (strpos($query, 'lectures') !== false) {
+            return [
+                'id' => 'test-lecture-123',
+                'title' => 'Palestra de Teste para Certificado',
+                'description' => 'Esta é uma palestra de teste para validar o sistema de certificados',
+                'speaker' => 'Instrutor Teste',
+                'duration_minutes' => 10, // 10 minutos para teste
+                'category' => 'Teste',
+                'embed_code' => '<div id="panda-test-player">Player de Teste</div>',
+                'created_at' => date('Y-m-d H:i:s')
+            ];
+        }
+        
+        if (strpos($query, 'users') !== false) {
+            return [
+                'id' => 'test-user-123',
+                'name' => 'Usuário Teste',
+                'email' => 'teste@exemplo.com',
+                'role' => 'subscriber',
+                'hotmart_status' => 'ACTIVE'
+            ];
+        }
+        
+        if (strpos($query, 'access_logs') !== false) {
+            // Simular progresso de 8 minutos (480 segundos) - suficiente para certificado
+            return [
+                'id' => 1,
+                'last_watched_seconds' => 480 // 8 minutos assistidos
+            ];
+        }
+        
+        if (strpos($query, 'certificates') !== false) {
+            return false; // Nenhum certificado existe ainda
+        }
+        
+        return false; // Dados padrão
+    }
+    
+    public function fetchAll($mode = null) {
+        // Para queries de hotmart_logs, retornar dados de exemplo
+        $backtrace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 3);
+        foreach ($backtrace as $trace) {
+            if (isset($trace['file']) && isset($trace['line'])) {
+                $file_content = @file($trace['file']);
+                if ($file_content && isset($file_content[$trace['line'] - 1])) {
+                    $line = $file_content[$trace['line'] - 1];
+                    if (strpos($line, 'hotmart_logs') !== false) {
+                        return [
+                            [
+                                'id' => 1,
+                                'event_type' => 'PURCHASE_COMPLETE',
+                                'status' => 'success',
+                                'user_email' => 'joao@exemplo.com',
+                                'user_name' => 'João Silva',
+                                'transaction_id' => 'HP123456789',
+                                'product_id' => 'PROD001',
+                                'product_name' => 'Curso Translators101',
+                                'price' => 197.00,
+                                'currency' => 'BRL',
+                                'hotmart_status' => 'APPROVED',
+                                'webhook_data' => '{"event":"PURCHASE_COMPLETE","data":{"buyer":{"email":"joao@exemplo.com","name":"João Silva"}}}',
+                                'response_data' => 'Usuário criado com sucesso',
+                                'created_at' => date('Y-m-d H:i:s', strtotime('-2 hours'))
+                            ],
+                            [
+                                'id' => 2,
+                                'event_type' => 'PURCHASE_CANCELED',
+                                'status' => 'success',
+                                'user_email' => 'maria@exemplo.com',
+                                'user_name' => 'Maria Santos',
+                                'transaction_id' => 'HP123456790',
+                                'product_id' => 'PROD001',
+                                'product_name' => 'Curso Translators101',
+                                'price' => 197.00,
+                                'currency' => 'BRL',
+                                'hotmart_status' => 'CANCELED',
+                                'webhook_data' => '{"event":"PURCHASE_CANCELED","data":{"buyer":{"email":"maria@exemplo.com","name":"Maria Santos"}}}',
+                                'response_data' => 'Acesso cancelado com sucesso',
+                                'created_at' => date('Y-m-d H:i:s', strtotime('-4 hours'))
+                            ],
+                            [
+                                'id' => 3,
+                                'event_type' => 'PURCHASE_COMPLETE',
+                                'status' => 'error',
+                                'user_email' => 'erro@exemplo.com',
+                                'user_name' => 'Usuário Erro',
+                                'transaction_id' => 'HP123456791',
+                                'product_id' => 'PROD001',
+                                'product_name' => 'Curso Translators101',
+                                'price' => 197.00,
+                                'currency' => 'BRL',
+                                'hotmart_status' => 'APPROVED',
+                                'webhook_data' => '{"event":"PURCHASE_COMPLETE","data":{"buyer":{"email":"erro@exemplo.com","name":"Usuário Erro"}}}',
+                                'response_data' => null,
+                                'error_message' => 'Erro simulado para demonstração',
+                                'created_at' => date('Y-m-d H:i:s', strtotime('-6 hours'))
+                            ]
+                        ];
+                    }
+                }
+            }
+        }
+        return []; // Listas vazias por padrão
+    }
+    
+    public function fetchColumn() {
+        // Para hotmart_logs, retornar valores simulados baseados na query
+        $backtrace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 3);
+        foreach ($backtrace as $trace) {
+            if (isset($trace['file']) && isset($trace['line'])) {
+                $file_content = @file($trace['file']);
+                if ($file_content && isset($file_content[$trace['line'] - 1])) {
+                    $line = $file_content[$trace['line'] - 1];
+                    if (strpos($line, 'hotmart_logs') !== false) {
+                        if (strpos($line, "status = 'success'") !== false) {
+                            return 2; // 2 sucessos
+                        } elseif (strpos($line, "status = 'error'") !== false) {
+                            return 1; // 1 erro
+                        } elseif (strpos($line, 'CURDATE()') !== false) {
+                            return 1; // 1 hoje
+                        }
+                        return 3; // Total
+                    }
+                }
+            }
+        }
+        return 0; // Return 0 for counts/numeric values in testing
+    }
+}
+
+// Use mock PDO for testing
+$pdo = new MockPDO();
+
+// Funções auxiliares de autenticação (garantir que estão definidas globalmente)
+if (!function_exists('isLoggedIn')) {
+    function isLoggedIn() {
+        return isset($_SESSION['user_id']);
+    }
+}
+
+if (!function_exists('isAdmin')) {
+    function isAdmin() {
+        return isLoggedIn() && isset($_SESSION['user_role']) && $_SESSION['user_role'] === 'admin';
+    }
+}
+
+if (!function_exists('isSubscriber')) {
+    function isSubscriber() {
+        // CORREÇÃO: Admin tem acesso completo, incluindo videoteca
+        if (isAdmin()) {
+            return true;
+        }
+        return isLoggedIn() && isset($_SESSION['is_subscriber']) && $_SESSION['is_subscriber'] == 1;
+    }
+}
+
+// Função adicional para verificar acesso à videoteca especificamente
+if (!function_exists('hasVideotecaAccess')) {
+    function hasVideotecaAccess() {
+        // Admin ou assinante têm acesso à videoteca
+        return isAdmin() || isSubscriber();
+    }
+}
+
+// Função para obter conexão com o banco (versão mock)
+function getConnection() {
+    return new MockPDO();
+}
+
+// Função para verificar se usuário está logado
+function isLoggedIn() {
+    return isset($_SESSION['user_id']);
+}
+
+// Função para verificar se usuário é admin
+function isAdmin() {
+    return isset($_SESSION['role']) && $_SESSION['role'] === 'admin';
+}
+
+// Função para verificar acesso à videoteca
+function hasVideotecaAccess() {
+    if (!isLoggedIn()) {
+        return false;
+    }
+    
+    // Admin ou subscriber podem acessar
+    return isset($_SESSION['role']) && 
+           ($_SESSION['role'] === 'admin' || $_SESSION['role'] === 'subscriber');
+}
+
+?>

@@ -1,0 +1,110 @@
+
+<?php
+session_start();
+header('Content-Type: application/json');
+
+require_once '../../config/database.php';
+
+$response = ['success' => false, 'message' => ''];
+
+// Log para debug
+function logProgress($message) {
+    $log_file = '../../certificate_verification.log';
+    $timestamp = date('Y-m-d H:i:s');
+    @file_put_contents($log_file, "[$timestamp] [SAVE_PROGRESS] $message\n", FILE_APPEND);
+}
+
+logProgress("API de salvamento de progresso iniciada");
+
+// Verificar autenticação
+if (!isset($_SESSION['user_id'])) {
+    $response['message'] = 'Usuário não autenticado.';
+    logProgress("ERRO: Usuário não autenticado");
+    echo json_encode($response);
+    exit;
+}
+
+$input = json_decode(file_get_contents('php://input'), true);
+$lecture_id = $input['lecture_id'] ?? null;
+$user_id = $input['user_id'] ?? null;
+$watched_seconds = isset($input['watched_seconds']) ? (int)$input['watched_seconds'] : 0;
+
+logProgress("Dados recebidos - Lecture: $lecture_id, User: $user_id, Seconds: $watched_seconds");
+
+if (empty($lecture_id) || empty($user_id) || $user_id !== $_SESSION['user_id']) {
+    $response['message'] = 'Dados inválidos.';
+    logProgress("ERRO: Dados inválidos ou user_id não confere");
+    echo json_encode($response);
+    exit;
+}
+
+try {
+    // Buscar título e duração da palestra
+    $stmt = $pdo->prepare("SELECT title, duration_minutes FROM lectures WHERE id = ?");
+    $stmt->execute([$lecture_id]);
+    $lecture_data = $stmt->fetch(PDO::FETCH_ASSOC);
+    $lecture_title = $lecture_data['title'] ?? null;
+    $lecture_duration_seconds = ($lecture_data['duration_minutes'] ?? 0) * 60;
+
+    if (!$lecture_title) {
+        $response['message'] = 'Palestra não encontrada.';
+        logProgress("ERRO: Palestra não encontrada - ID: $lecture_id");
+        echo json_encode($response);
+        exit;
+    }
+
+    logProgress("Palestra encontrada: $lecture_title (duração: {$lecture_duration_seconds}s)");
+
+    // IMPORTANTE: Limitar o tempo assistido à duração real do vídeo
+    $watched_seconds = min($watched_seconds, $lecture_duration_seconds);
+    logProgress("Tempo limitado à duração do vídeo: {$watched_seconds}s");
+
+    // Verificar se log existe
+    $stmt = $pdo->prepare("SELECT id, last_watched_seconds FROM access_logs WHERE user_id = ? AND resource = ? AND action = 'view_lecture'");
+    $stmt->execute([$user_id, $lecture_title]);
+    $existing_log = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if ($existing_log) {
+        // Atualizar progresso existente - usar o maior valor, mas limitado à duração
+        $current_seconds = $existing_log['last_watched_seconds'] ?? 0;
+        $new_seconds = min(max($current_seconds, $watched_seconds), $lecture_duration_seconds);
+        
+        $stmt = $pdo->prepare("UPDATE access_logs SET last_watched_seconds = ?, updated_at = NOW() WHERE id = ?");
+        $stmt->execute([$new_seconds, $existing_log['id']]);
+        
+        logProgress("ATUALIZADO: Progresso de {$current_seconds}s para {$new_seconds}s (limitado a {$lecture_duration_seconds}s)");
+    } else {
+        // Criar novo log
+        $stmt = $pdo->prepare("INSERT INTO access_logs (user_id, action, resource, ip_address, user_agent, last_watched_seconds) VALUES (?, 'view_lecture', ?, ?, ?, ?)");
+        $stmt->execute([
+            $user_id,
+            $lecture_title,
+            $_SERVER['REMOTE_ADDR'] ?? 'N/A',
+            $_SERVER['HTTP_USER_AGENT'] ?? 'N/A',
+            $watched_seconds
+        ]);
+        
+        logProgress("CRIADO: Novo log com {$watched_seconds}s");
+    }
+
+    $response['success'] = true;
+    $response['message'] = 'Progresso salvo com sucesso.';
+    $response['debug'] = [
+        'lecture_title' => $lecture_title,
+        'saved_seconds' => $watched_seconds,
+        'lecture_duration_seconds' => $lecture_duration_seconds,
+        'was_update' => !empty($existing_log)
+    ];
+
+    logProgress("SUCESSO: Progresso salvo - {$watched_seconds}s");
+
+} catch (PDOException $e) {
+    $response['message'] = 'Erro no banco de dados.';
+    logProgress("ERRO PDO: " . $e->getMessage());
+} catch (Exception $e) {
+    $response['message'] = 'Erro inesperado.';
+    logProgress("ERRO: " . $e->getMessage());
+}
+
+echo json_encode($response);
+?>

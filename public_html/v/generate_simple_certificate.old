@@ -1,0 +1,275 @@
+<?php
+session_start();
+require_once 'config/database.php';
+require_once 'includes/certificate_generator_helper.php';
+require_once 'includes/certificate_pdf_generator.php';
+
+// Função auxiliar para logs
+function writeToCustomLog($message) {
+    $log_file = __DIR__ . '/certificate_errors.log'; 
+    $timestamp = date('Y-m-d H:i:s');
+    @file_put_contents($log_file, "[$timestamp] [GENERATE_SIMPLE] $message\n", FILE_APPEND);
+}
+
+writeToCustomLog("Script generate_simple_certificate.php iniciado");
+
+header('Content-Type: application/json');
+
+// Verificar se o usuário está logado
+if (!isSubscriber()) {
+    echo json_encode(['success' => false, 'message' => 'Usuário não autorizado']);
+    writeToCustomLog("ERRO: Usuário não autorizado");
+    exit;
+}
+
+// Obter dados da requisição
+$input = json_decode(file_get_contents('php://input'), true);
+if (!$input) {
+    echo json_encode(['success' => false, 'message' => 'Dados inválidos recebidos']);
+    writeToCustomLog("ERRO: Dados inválidos recebidos");
+    exit;
+}
+
+$lecture_id = $input['lecture_id'] ?? '';
+$user_id = $input['user_id'] ?? '';
+$watched_seconds = isset($input['watched_seconds']) ? (int)$input['watched_seconds'] : 0;
+
+writeToCustomLog("Dados recebidos - Lecture: $lecture_id, User: $user_id, Watched: {$watched_seconds}s");
+
+// Validação básica
+if (empty($lecture_id) || empty($user_id)) {
+    echo json_encode(['success' => false, 'message' => 'Dados obrigatórios ausentes']);
+    writeToCustomLog("ERRO: Dados obrigatórios ausentes");
+    exit;
+}
+
+// Verificar se o user_id corresponde à sessão
+if ($user_id !== $_SESSION['user_id']) {
+    echo json_encode(['success' => false, 'message' => 'ID de usuário não corresponde à sessão']);
+    writeToCustomLog("ERRO: User ID não corresponde - Sessão: " . $_SESSION['user_id'] . ", Enviado: $user_id");
+    exit;
+}
+
+try {
+    // Buscar dados da palestra
+    $stmt = $pdo->prepare("SELECT * FROM lectures WHERE id = ?");
+    $stmt->execute([$lecture_id]);
+    $lecture = $stmt->fetch();
+    
+    if (!$lecture) {
+        echo json_encode(['success' => false, 'message' => 'Palestra não encontrada']);
+        writeToCustomLog("ERRO: Palestra não encontrada - ID: $lecture_id");
+        exit;
+    }
+    
+    // Buscar dados do usuário
+    $stmt = $pdo->prepare("SELECT * FROM users WHERE id = ?");
+    $stmt->execute([$user_id]);
+    $user = $stmt->fetch();
+    
+    if (!$user) {
+        echo json_encode(['success' => false, 'message' => 'Usuário não encontrado']);
+        writeToCustomLog("ERRO: Usuário não encontrado - ID: $user_id");
+        exit;
+    }
+    
+    // VALIDAÇÃO SIMPLIFICADA PARA LIBERAÇÃO DO CERTIFICADO
+    writeToCustomLog("Iniciando validações simplificadas");
+    
+    // 1. Verificar progresso no banco de dados
+    $stmt = $pdo->prepare("SELECT last_watched_seconds FROM access_logs WHERE user_id = ? AND resource = ? AND action = 'view_lecture'");
+    $stmt->execute([$user_id, $lecture['title']]);
+    $progress_data = $stmt->fetch();
+    $db_watched_seconds = $progress_data['last_watched_seconds'] ?? 0;
+    
+    writeToCustomLog("Progresso no DB: {$db_watched_seconds}s, Enviado pelo cliente: {$watched_seconds}s");
+    
+    // 2. Usar o maior valor entre DB e cliente, MAS limitar à duração real do vídeo
+    $lecture_duration_seconds = ($lecture['duration_minutes'] ?? 0) * 60;
+    $final_watched_seconds = min(max($db_watched_seconds, $watched_seconds), $lecture_duration_seconds);
+    writeToCustomLog("Tempo final considerado: {$final_watched_seconds}s (limitado à duração de {$lecture_duration_seconds}s)");
+    
+    // 3. Validar tempo mínimo (85% da duração da palestra)
+    $required_seconds = floor($lecture_duration_seconds * 0.85); // 85% da duração total
+    
+    writeToCustomLog("Duração total: {$lecture_duration_seconds}s, Requerido (85%): {$required_seconds}s");
+    
+    if ($final_watched_seconds < $required_seconds) {
+        $remaining = $required_seconds - $final_watched_seconds;
+        echo json_encode([
+            'success' => false, 
+            'message' => "Tempo insuficiente. Assistido: {$final_watched_seconds}s de {$required_seconds}s necessários. Faltam " . ceil($remaining/60) . " minutos."
+        ]);
+        writeToCustomLog("ERRO: Tempo insuficiente - Assistido: {$final_watched_seconds}s, Requerido: {$required_seconds}s");
+        exit;
+    }
+    
+    // 4. Verificar se já existe certificado
+    $stmt = $pdo->prepare("SELECT id FROM certificates WHERE user_id = ? AND lecture_id = ?");
+    $stmt->execute([$user_id, $lecture_id]);
+    $existing_certificate = $stmt->fetch();
+    
+    if ($existing_certificate) {
+        echo json_encode([
+            'success' => true, 
+            'message' => 'Certificado já existe',
+            'certificate_id' => $existing_certificate['id'],
+            'certificate_url' => '/view_certificate_files.php?id=' . $existing_certificate['id'],
+            'download_url' => '/download_certificate_files.php?id=' . $existing_certificate['id'],
+            'verification_url' => '/verificar_certificado.php?id=' . $existing_certificate['id']
+        ]);
+        writeToCustomLog("INFO: Certificado já existe - ID: " . $existing_certificate['id']);
+        exit;
+    }
+    
+    // GERAR NOVO CERTIFICADO
+    writeToCustomLog("Todas as validações passaram - gerando certificado");
+    
+    // Calcular duração em horas (arredondar para próxima meia hora)
+    $duration_hours = $lecture['duration_minutes'] / 60;
+    if ($duration_hours <= 0.5) {
+        $duration_hours = 0.5;
+    } elseif ($duration_hours <= 1.0) {
+        $duration_hours = 1.0;
+    } elseif ($duration_hours <= 1.5) {
+        $duration_hours = 1.5;
+    } else {
+        $duration_hours = ceil($duration_hours * 2) / 2;
+    }
+    
+    // Gerar UUID para o certificado
+    function generateUUID() {
+        return sprintf( '%04x%04x-%04x-%04x-%04x-%04x%04x%04x',
+            mt_rand( 0, 0xffff ), mt_rand( 0, 0xffff ),
+            mt_rand( 0, 0xffff ),
+            mt_rand( 0, 0x0fff ) | 0x4000,
+            mt_rand( 0, 0x3fff ) | 0x8000,
+            mt_rand( 0, 0xffff ), mt_rand( 0, 0xffff ), mt_rand( 0, 0xffff )
+        );
+    }
+    
+    $certificate_id = generateUUID();
+    
+    // Inserir certificado no banco PRIMEIRO
+    $stmt = $pdo->prepare("
+        INSERT INTO certificates 
+        (id, user_id, lecture_id, user_name, lecture_title, speaker_name, duration_hours) 
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    ");
+    
+    $stmt->execute([
+        $certificate_id,
+        $user_id,
+        $lecture_id,
+        $user['name'],
+        $lecture['title'],
+        $lecture['speaker'],
+        $duration_hours
+    ]);
+    
+    writeToCustomLog("SUCESSO: Certificado inserido no banco - ID: $certificate_id");
+    
+    // Preparar dados para geração (USAR O SISTEMA OFICIAL T101)
+    $certificate_data = [
+        'user_name' => $user['name'],
+        'lecture_title' => $lecture['title'],
+        'speaker_name' => $lecture['speaker'],
+        'duration_minutes' => $lecture['duration_minutes']
+    ];
+    
+    // GERAR ARQUIVO PNG OFICIAL T101 (para visualização)
+    writeToCustomLog("Iniciando geração do arquivo PNG T101 oficial para visualização");
+    
+    $generated_png_path = generateAndSaveCertificatePng(
+        $certificate_id,
+        $certificate_data,
+        'AUTO_PNG',
+        'writeToCustomLog'
+    );
+    
+    // GERAR ARQUIVO PDF (para download)
+    writeToCustomLog("Iniciando geração do arquivo PDF para download");
+    
+    $generated_pdf_path = generateCertificatePDF(
+        $certificate_id,
+        $certificate_data,
+        'AUTO_PDF',
+        'writeToCustomLog'
+    );
+    
+    // Verificar resultados da geração
+    $png_success = $generated_png_path !== false;
+    $pdf_success = $generated_pdf_path !== false;
+    
+    if ($png_success || $pdf_success) {
+        $status_message = [];
+        if ($png_success && $pdf_success) {
+            $status_message[] = "Certificado T101 gerado com sucesso! (PNG + PDF)";
+            writeToCustomLog("SUCESSO COMPLETO: PNG T101 e PDF gerados");
+        } elseif ($png_success) {
+            $status_message[] = "Certificado PNG T101 gerado. PDF com problema técnico.";
+            writeToCustomLog("SUCESSO PARCIAL: Apenas PNG T101 gerado");
+        } elseif ($pdf_success) {
+            $status_message[] = "Certificado PDF gerado. PNG T101 com problema técnico.";
+            writeToCustomLog("SUCESSO PARCIAL: Apenas PDF gerado");
+        }
+        
+        // Resposta de sucesso
+        echo json_encode([
+            'success' => true,
+            'message' => implode(' ', $status_message),
+            'certificate_id' => $certificate_id,
+            'certificate_url' => '/view_certificate_files.php?id=' . $certificate_id,
+            'download_url' => '/download_certificate_files.php?id=' . $certificate_id,
+            'verification_url' => '/verificar_certificado.php?id=' . $certificate_id,
+            'files_generated' => [
+                'png' => $png_success ? basename($generated_png_path) : null,
+                'pdf' => $pdf_success ? basename($generated_pdf_path) : null
+            ],
+            'debug_info' => [
+                'watched_seconds_db' => $db_watched_seconds,
+                'watched_seconds_client' => $watched_seconds,
+                'final_watched_seconds' => $final_watched_seconds,
+                'required_seconds' => $required_seconds,
+                'duration_hours' => $duration_hours,
+                'percentage_watched' => round(($final_watched_seconds/$lecture_duration_seconds)*100, 1),
+                'png_generated' => $png_success,
+                'pdf_generated' => $pdf_success,
+                'png_path' => $generated_png_path,
+                'pdf_path' => $generated_pdf_path
+            ]
+        ]);
+        
+    } else {
+        // Ambos falharam
+        writeToCustomLog("ERRO: Falha na geração de PNG T101 E PDF");
+        
+        echo json_encode([
+            'success' => true,
+            'message' => 'Certificado registrado no banco, mas erro na geração dos arquivos T101. Contate o suporte.',
+            'certificate_id' => $certificate_id,
+            'certificate_url' => '/view_certificate.php?id=' . $certificate_id,
+            'debug_info' => [
+                'watched_seconds_db' => $db_watched_seconds,
+                'watched_seconds_client' => $watched_seconds,
+                'final_watched_seconds' => $final_watched_seconds,
+                'required_seconds' => $required_seconds,
+                'duration_hours' => $duration_hours,
+                'percentage_watched' => round(($final_watched_seconds/$lecture_duration_seconds)*100, 1),
+                'png_generated' => false,
+                'pdf_generated' => false,
+                'error' => 'Falha na geração de arquivos PNG T101 e PDF'
+            ]
+        ]);
+    }
+    
+    // Log final de sucesso
+    writeToCustomLog("PROCESSO COMPLETO: Certificado ID: $certificate_id gerado para usuário {$user['name']} - Palestra: {$lecture['title']} - {$final_watched_seconds}s/{$lecture_duration_seconds}s (" . round(($final_watched_seconds/$lecture_duration_seconds)*100, 1) . "%) - PNG T101: " . ($png_success ? 'OK' : 'ERRO') . " - PDF: " . ($pdf_success ? 'OK' : 'ERRO'));
+    
+} catch(PDOException $e) {
+    echo json_encode(['success' => false, 'message' => 'Erro no banco de dados']);
+    writeToCustomLog("ERRO PDO: " . $e->getMessage());
+} catch(Exception $e) {
+    echo json_encode(['success' => false, 'message' => 'Erro inesperado']);
+    writeToCustomLog("ERRO: " . $e->getMessage());
+}

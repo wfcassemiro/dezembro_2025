@@ -1,0 +1,223 @@
+<?php
+error_reporting(E_ERROR | E_PARSE);
+session_start();
+require_once __DIR__ . "/../../config/database.php";
+require_once __DIR__ . "/../../config/config.php";
+require_once __DIR__ . "/../../vendor/autoload.php";
+require_once __DIR__ . "/auth_check.php";
+
+// Verifica se a classe PhpSpreadsheet está disponível
+if (!class_exists("\\PhpOffice\\PhpSpreadsheet\\IOFactory")) {
+    die("Classe PhpOffice\\PhpSpreadsheet\\IOFactory não encontrada. Verifique a instalação do Composer e o autoload.");
+}
+
+// --- Funções de Processamento de Arquivos ---
+function processXLSX($filePath) {
+    $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($filePath);
+    $sheet = $spreadsheet->getActiveSheet();
+    $data = [];
+    foreach ($sheet->getRowIterator() as $row) {
+        $cellIterator = $row->getCellIterator();
+        $cellIterator->setIterateOnlyExistingCells(false);
+        $rowData = [];
+        foreach ($cellIterator as $cell) {
+            $rowData[] = $cell->getValue();
+        }
+        $data[] = $rowData;
+    }
+    return $data;
+}
+
+function processCSV($filePath) {
+    $data = [];
+    if (($handle = fopen($filePath, "r")) !== false) {
+        while (($row = fgetcsv($handle, 1000, ",")) !== false) {
+            $data[] = $row;
+        }
+        fclose($handle);
+    }
+    return $data;
+}
+
+function processDOCX($filePath) {
+    $phpWord = \PhpOffice\PhpWord\IOFactory::load($filePath);
+    $text = "";
+    foreach ($phpWord->getSections() as $section) {
+        $elements = $section->getElements();
+        foreach ($elements as $element) {
+            if (method_exists($element, "getText")) {
+                $text .= $element->getText() . "\n";
+            }
+        }
+    }
+    return explode("\n", $text);
+}
+
+function processPDF($filePath, $startPage = 1) {
+    $parser = new \Smalot\PdfParser\Parser(); // CORRIGIDO AQUI
+    $pdf = $parser->parseFile($filePath);
+    $pages = $pdf->getPages();
+    $text = "";
+    for ($i = $startPage - 1; $i < count($pages); $i++) {
+        $text .= $pages[$i]->getText() . "\n";
+    }
+    return explode("\n", $text);
+}
+
+// --- Nova Função de Análise de Glossário ---
+function parseGlossaryText($lines) {
+    $glossaryEntries = [];
+    $currentSource = "";
+    $currentTargetParts = [];
+
+    foreach ($lines as $line) {
+        $line = trim($line);
+        if (empty($line)) {
+            continue;
+        }
+        if (preg_match("/^[A-Z]$|^[0-9]$/", $line)) {
+            continue;
+        }
+        if (preg_match("/^([A-ZÀ-Ú][^:]*?)\\s*[:–—]\\s*(.*)/u", $line, $matches)) {
+            if (!empty($currentSource) && !empty($currentTargetParts)) {
+                $glossaryEntries[] = ["source" => $currentSource, "target" => implode(" ", $currentTargetParts)];
+            }
+            $currentSource = trim($matches[1]);
+            $currentTargetParts = [trim($matches[2])];
+        }
+        elseif (preg_match("/^([A-ZÀ-Ú][\\w\\s\\-\\'\\’\\(\\)]+?)\\s+([A-ZÀ-Úa-zà-ú].*)/u", $line, $matches) && strpos($line, ":") === false && strpos($line, " - ") === false && strpos($line, " – ") === false && strpos($line, " — ") === false) {
+            if (!empty($currentSource) && !empty($currentTargetParts)) {
+                $glossaryEntries[] = ["source" => $currentSource, "target" => implode(" ", $currentTargetParts)];
+            }
+            $currentSource = trim($matches[1]);
+            $currentTargetParts = [trim($matches[2])];
+        }
+        elseif (!empty($currentSource)) {
+            $currentTargetParts[] = $line;
+        }
+    }
+
+    if (!empty($currentSource) && !empty($currentTargetParts)) {
+        $glossaryEntries[] = ["source" => $currentSource, "target" => implode(" ", $currentTargetParts)];
+    }
+
+    $finalGlossary = [];
+    foreach ($glossaryEntries as $entry) {
+        $source = $entry["source"];
+        $target = $entry["target"];
+        $meanings = preg_split("/[;,|]/u", $target);
+        if (count($meanings) > 1) {
+            foreach ($meanings as $meaning) {
+                $meaning = trim($meaning);
+                if (!empty($meaning)) {
+                    $finalGlossary[] = ["source" => $source, "target" => $meaning];
+                }
+            }
+        } else {
+            $finalGlossary[] = $entry;
+        }
+    }
+    return $finalGlossary;
+}
+
+// --- Processamento do Upload e Geração Direta do CSV ---
+$error_message = "";
+
+if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_FILES["file"])) {
+    $area = $_POST["area"] ?? "";
+    $source_lang = $_POST["source_lang"] ?? "";
+    $target_lang = $_POST["target_lang"] ?? "";
+    $pdf_start_page = isset($_POST["pdf_start_page"]) && $_POST["pdf_start_page"] !== "" ? intval($_POST["pdf_start_page"]) : 1;
+
+    $file = $_FILES["file"];
+    $ext = strtolower(pathinfo($file["name"], PATHINFO_EXTENSION));
+    $uploadDir = __DIR__ . "/uploads/";
+    if (!is_dir($uploadDir)) {
+        mkdir($uploadDir, 0777, true);
+    }
+    $filePath = $uploadDir . uniqid("glossary_") . "." . $ext;
+
+    if (move_uploaded_file($file["tmp_name"], $filePath)) {
+        $rawLines = [];
+        if ($ext === "xlsx") {
+            $rawLines = processXLSX($filePath);
+            $tempLines = [];
+            foreach ($rawLines as $row) {
+                $tempLines[] = implode(" ", $row);
+            }
+            $rawLines = $tempLines;
+        } elseif ($ext === "csv") {
+            $rawLines = processCSV($filePath);
+            $tempLines = [];
+            foreach ($rawLines as $row) {
+                $tempLines[] = implode(",", $row);
+            }
+            $rawLines = $tempLines;
+        } elseif ($ext === "docx") {
+            $rawLines = processDOCX($filePath);
+        } elseif ($ext === "pdf") {
+            $rawLines = processPDF($filePath, $pdf_start_page);
+        } else {
+            $error_message = "Formato de arquivo não suportado.";
+        }
+
+        unlink($filePath);
+
+        if (empty($rawLines) || $error_message) {
+            $_SESSION["message"] = $error_message ?: "Nenhum dado foi extraído do arquivo ou formato não suportado.";
+            $_SESSION["error"] = true;
+            header("Location: upload_form.php");
+            exit();
+        }
+
+        $glossaryEntries = parseGlossaryText($rawLines);
+
+        if (empty($glossaryEntries)) {
+            $_SESSION["message"] = "Nenhuma entrada de glossário válida foi encontrada no arquivo.";
+            $_SESSION["error"] = true;
+            header("Location: upload_form.php");
+            exit();
+        }
+
+        $output = fopen("php://temp", "r+");
+        fputcsv($output, ["source", "target"]);
+
+        foreach ($glossaryEntries as $entry) {
+            fputcsv($output, [$entry["source"], $entry["target"]]);
+        }
+
+        rewind($output);
+        $csvContent = stream_get_contents($output);
+        fclose($output);
+
+        $outputFilename = sprintf(
+            "%s_%s_%s.csv",
+            preg_replace("/[^a-zA-Z0-9_]/", "", strtolower(str_replace(" ", "_", $area))),
+            preg_replace("/[^a-zA-Z0-9_]/", "", strtolower(str_replace(" ", "_", $source_lang))),
+            preg_replace("/[^a-zA-Z0-9_]/", "", strtolower(str_replace(" ", "_", $target_lang)))
+        );
+        $outputFilename = preg_replace("/__+/", "_", $outputFilename);
+        $outputFilename = trim($outputFilename, "_");
+
+        header("Content-Type: text/csv; charset=utf-8");
+        header("Content-Disposition: attachment; filename=\"" . $outputFilename . "\"");
+        echo "\xEF\xBB\xBF";
+        echo $csvContent;
+
+        $_SESSION["message"] = "Glossário processado e CSV gerado com sucesso!";
+        $_SESSION["success"] = true;
+        header("Location: upload_form.php");
+        exit();
+
+    } else {
+        $error_message = "Erro ao fazer upload do arquivo.";
+        $_SESSION["message"] = $error_message;
+        $_SESSION["error"] = true;
+        header("Location: upload_form.php");
+        exit();
+    }
+} else {
+    header("Location: upload_form.php");
+    exit();
+}
+?>

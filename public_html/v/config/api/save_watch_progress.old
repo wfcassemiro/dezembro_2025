@@ -1,0 +1,124 @@
+<?php
+session_start();
+require_once __DIR__ . '/../config/database.php';
+
+header('Content-Type: application/json');
+header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Methods: POST');
+header('Access-Control-Allow-Headers: Content-Type');
+
+$response = ['success' => false, 'message' => ''];
+
+// Verificar autenticação
+if (!isset($_SESSION['user_id'])) {
+    $response['message'] = 'Usuário não autenticado.';
+    echo json_encode($response);
+    exit;
+}
+
+$raw_input = file_get_contents('php://input');
+$input = json_decode($raw_input, true);
+
+if (json_last_error() !== JSON_ERROR_NONE) {
+    $response['message'] = 'Erro ao decodificar JSON.';
+    echo json_encode($response);
+    exit;
+}
+
+$lecture_id = $input['lecture_id'] ?? null;
+$user_id = $input['user_id'] ?? null;
+$last_watched_seconds = $input['last_watched_seconds'] ?? 0;
+$accumulated_watch_time = $input['accumulated_watch_time'] ?? 0;
+$watch_segments = $input['watch_segments'] ?? [];
+$skip_count = $input['skip_count'] ?? 0;
+$session_duration = $input['session_duration'] ?? 0;
+$is_final = $input['is_final'] ?? false;
+
+// Validação
+if (empty($lecture_id) || empty($user_id) || $user_id !== $_SESSION['user_id']) {
+    $response['message'] = 'Dados inválidos.';
+    echo json_encode($response);
+    exit;
+}
+
+try {
+    // Buscar título da palestra
+    $stmt = $pdo->prepare("SELECT title FROM lectures WHERE id = ?");
+    $stmt->execute([$lecture_id]);
+    $lecture = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$lecture) {
+        $response['message'] = 'Palestra não encontrada.';
+        echo json_encode($response);
+        exit;
+    }
+
+    $lecture_title = $lecture['title'];
+
+    // Verificar se já existe registro
+    $stmt_check = $pdo->prepare("
+        SELECT id, accumulated_watch_time, watch_sessions 
+        FROM access_logs 
+        WHERE user_id = ? AND resource = ? AND action = 'view_lecture'
+    ");
+    $stmt_check->execute([$user_id, $lecture_title]);
+    $existing = $stmt_check->fetch(PDO::FETCH_ASSOC);
+
+    if ($existing) {
+        // Atualizar registro existente
+        $new_accumulated_time = max($existing['accumulated_watch_time'], $accumulated_watch_time);
+        $new_sessions = $existing['watch_sessions'] + ($is_final ? 1 : 0);
+
+        $stmt_update = $pdo->prepare("
+            UPDATE access_logs 
+            SET last_watched_seconds = ?,
+                accumulated_watch_time = ?,
+                watch_sessions = ?,
+                skip_count = ?,
+                watch_segments = ?,
+                updated_at = NOW()
+            WHERE user_id = ? AND resource = ? AND action = 'view_lecture'
+        ");
+
+        $stmt_update->execute([
+            $last_watched_seconds,
+            $new_accumulated_time,
+            $new_sessions,
+            $skip_count,
+            json_encode($watch_segments),
+            $user_id,
+            $lecture_title
+        ]);
+
+        $response['message'] = 'Progresso atualizado com sucesso.';
+    } else {
+        // Criar novo registro
+        $stmt_insert = $pdo->prepare("
+            INSERT INTO access_logs 
+            (user_id, resource, action, last_watched_seconds, accumulated_watch_time, 
+             watch_sessions, skip_count, watch_segments, created_at, updated_at)
+            VALUES (?, ?, 'view_lecture', ?, ?, 1, ?, ?, NOW(), NOW())
+        ");
+
+        $stmt_insert->execute([
+            $user_id,
+            $lecture_title,
+            $last_watched_seconds,
+            $accumulated_watch_time,
+            $skip_count,
+            json_encode($watch_segments)
+        ]);
+
+        $response['message'] = 'Progresso salvo com sucesso.';
+    }
+
+    $response['success'] = true;
+
+} catch (PDOException $e) {
+    $response['message'] = 'Erro no banco de dados: ' . $e->getMessage();
+} catch (Exception $e) {
+    $response['message'] = 'Erro inesperado: ' . $e->getMessage();
+}
+
+echo json_encode($response);
+?>
