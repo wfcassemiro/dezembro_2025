@@ -94,3 +94,7 @@ android-sdk/ -e
 *.env
 *.env.*
 projeto_php/.git/objects/pack/pack-eebaef9988d0f285c24b4038e311fbcfa058a4f5.pack
+-e 
+# Environment files
+*.env
+*.env.*
