@@ -32,7 +32,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         
         if (isset($_FILES['image']) && $_FILES['image']['error'] === 0) {
             // Diretório correto para announcements
-            $upload_dir = __DIR__ . '/../../images/announcements/';
+            $upload_dir = __DIR__ . '/../images/announcements/';
             
             // Criar diretório se não existir
             if (!is_dir($upload_dir)) {
@@ -99,7 +99,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         try {
             if (isset($_FILES['image']) && $_FILES['image']['error'] === 0) {
-                $upload_dir = __DIR__ . '/../../images/announcements/';
+                $upload_dir = __DIR__ . '/../images/announcements/';
                 
                 // Criar diretório se não existir
                 if (!is_dir($upload_dir)) {
