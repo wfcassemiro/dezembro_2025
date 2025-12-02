@@ -119,7 +119,7 @@ function sendCertificateEmailNotification($user_email, $user_name, $certificate_
                 <div class='content'>
                     <h2>Olá, " . htmlspecialchars($user_name) . "!</h2>
                     
-                    <p>Seu certificado de participação foi gerado com sucesso no sistema T101!</p>
+                    <p>Seu certificado de participação foi gerado no sistema T101!</p>
                     
                     <h3>📋 Detalhes do Certificado:</h3>
                     <ul>
@@ -165,7 +165,7 @@ function sendCertificateEmailNotification($user_email, $user_name, $certificate_
         $sent = mail($user_email, $subject, $message, $headers_string);
         
         if ($sent) {
-            error_log("Email T101 enviado com sucesso para: " . $user_email);
+            error_log("Email T101 enviado para: " . $user_email);
             return true;
         } else {
             error_log("Falha no envio de email T101 para: " . $user_email);
@@ -590,7 +590,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     // Log da ação
                     logCertificateAction('DELETE', $certificate_id, $cert['user_id'], $cert['lecture_id'], $_SESSION['user_id'], "Deletado: {$cert['user_name']} - {$cert['lecture_title']}");
                     
-                    $message = "🗑️ Certificado deletado com sucesso: {$cert['user_name']} - {$cert['lecture_title']}";
+                    $message = "🗑️ Certificado deletado: {$cert['user_name']} - {$cert['lecture_title']}";
                 }
             } catch (Exception $e) {
                 $error = 'Erro ao deletar certificado: ' . $e->getMessage();
@@ -644,7 +644,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         // Log da ação
                         logCertificateAction('REGENERATE', $certificate_id, $cert['user_id'], $cert['lecture_id'], $_SESSION['user_id'], "Regenerado: {$cert['user_name']} - {$cert['lecture_title']} - Arquivo: " . basename($physical_file_path));
                         
-                        $message = "🔄 Certificado regenerado com sucesso: {$cert['user_name']} - {$cert['lecture_title']}";
+                        $message = "🔄 Certificado regenerado: {$cert['user_name']} - {$cert['lecture_title']}";
                     } else {
                         $error = 'Certificado atualizado no banco, mas erro ao gerar arquivo físico.';
                     }
@@ -1385,7 +1385,7 @@ include __DIR__ . '/../vision/includes/sidebar.php';
         });
         
         container.innerHTML = html;
-        console.log('✅ Lista renderizada com sucesso!');
+        console.log('✅ Lista renderizada!');
     }
     
     function selectAllParticipants() {
@@ -1477,7 +1477,7 @@ include __DIR__ . '/../vision/includes/sidebar.php';
                         console.log(`  ${index + 1}. ${lecture.title}`);
                     });
                     
-                    console.log('✅ Dropdown populado com sucesso!');
+                    console.log('✅ Dropdown populado!');
                 } else {
                     console.warn('⚠️ Nenhuma palestra encontrada ou erro no servidor');
                 }
