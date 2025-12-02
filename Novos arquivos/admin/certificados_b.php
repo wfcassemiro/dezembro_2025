@@ -23,12 +23,90 @@ function sendCertificateEmailNotification($user_email, $user_name, $certificate_
             <meta charset='UTF-8'>
             <title>Seu Certificado T101</title>
             <style>
-                body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-                .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-                .header { background: linear-gradient(135deg, #8e44ad, #9b59b6); color: white; padding: 30px; text-align: center; border-radius: 10px; }
-                .content { background: #f9f9f9; padding: 30px; border-radius: 10px; margin: 20px 0; }
-                .button { display: inline-block; background: #8e44ad; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; margin: 10px 5px; }
-                .footer { text-align: center; color: #666; font-size: 14px; margin-top: 30px; }
+                body { 
+                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+                    line-height: 1.6; 
+                    color: #333; 
+                    background-color: #f4f4f4;
+                    margin: 0;
+                    padding: 20px;
+                }
+                .container { 
+                    max-width: 600px; 
+                    margin: 0 auto; 
+                    background: white;
+                    border-radius: 15px;
+                    overflow: hidden;
+                    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+                }
+                .header { 
+                    background: linear-gradient(135deg, #8e44ad, #9b59b6); 
+                    color: white; 
+                    padding: 40px 30px; 
+                    text-align: center;
+                }
+                .header h1 {
+                    margin: 0 0 10px 0;
+                    font-size: 28px;
+                }
+                .header p {
+                    margin: 0;
+                    font-size: 16px;
+                    opacity: 0.9;
+                }
+                .content { 
+                    background: white; 
+                    padding: 40px 30px;
+                }
+                .content h2 {
+                    color: #2c3e50;
+                    margin-top: 0;
+                }
+                .content h3 {
+                    color: #8e44ad;
+                    margin-top: 30px;
+                    margin-bottom: 15px;
+                }
+                .content ul {
+                    background: #f8f9fa;
+                    padding: 20px 20px 20px 40px;
+                    border-radius: 8px;
+                    border-left: 4px solid #8e44ad;
+                }
+                .button { 
+                    display: inline-block; 
+                    background: linear-gradient(135deg, #c084fc, #a855f7);
+                    color: white !important;
+                    font-weight: 600;
+                    padding: 14px 28px; 
+                    text-decoration: none; 
+                    border-radius: 8px; 
+                    margin: 10px 5px;
+                    box-shadow: 0 4px 12px rgba(192, 132, 252, 0.3);
+                    transition: all 0.3s ease;
+                }
+                .button:hover {
+                    background: linear-gradient(135deg, #a855f7, #9333ea);
+                    transform: translateY(-2px);
+                    box-shadow: 0 6px 16px rgba(192, 132, 252, 0.4);
+                }
+                .button-secondary {
+                    background: linear-gradient(135deg, #3b82f6, #2563eb) !important;
+                    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+                }
+                .button-secondary:hover {
+                    background: linear-gradient(135deg, #2563eb, #1d4ed8) !important;
+                }
+                .footer { 
+                    text-align: center; 
+                    color: #666; 
+                    font-size: 13px; 
+                    padding: 30px;
+                    background: #f8f9fa;
+                }
+                .footer p {
+                    margin: 5px 0;
+                }
             </style>
         </head>
         <body>
@@ -59,10 +137,10 @@ function sendCertificateEmailNotification($user_email, $user_name, $certificate_
                     <h3>🔍 Verificação de Autenticidade:</h3>
                     <p>Qualquer pessoa pode verificar a autenticidade deste certificado através do link:</p>
                     <p style='text-align: center;'>
-                        <a href='" . $verification_url . "' class='button'>🛡️ Verificar Autenticidade</a>
+                        <a href='" . $verification_url . "' class='button button-secondary'>🛡️ Verificar Autenticidade</a>
                     </p>
                     
-                    <p><small>Este link também está disponível via QR Code no certificado.</small></p>
+                    <p style='margin-top: 20px; color: #666; font-size: 14px;'><small>Este link também está disponível via QR Code no certificado.</small></p>
                 </div>
                 
                 <div class='footer'>
