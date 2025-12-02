@@ -1427,12 +1427,6 @@ include __DIR__ . '/../vision/includes/sidebar.php';
                 document.getElementById('csv_date_hidden').value = lecture.date_input;
             }
             
-            // Preencher duração (converter de horas para minutos se necessário)
-            if (lecture.duration_hours) {
-                const minutes = lecture.duration_hours * 60;
-                document.getElementById('duration_minutes_manual').value = minutes;
-            }
-            
             // Mostrar seção de dados da palestra
             document.getElementById('lecture_data_section').style.display = 'block';
             
@@ -1442,7 +1436,7 @@ include __DIR__ . '/../vision/includes/sidebar.php';
                     <li><strong>Palestra:</strong> ${lecture.title}</li>
                     <li><strong>Palestrante:</strong> ${lecture.speaker}</li>
                     <li><strong>Data:</strong> ${lecture.formatted_date}</li>
-                    <li><strong>Duração:</strong> ${lecture.duration_hours * 60} minutos</li>
+                    ${lecture.lecture_time ? `<li><strong>Horário:</strong> ${lecture.lecture_time}h</li>` : ''}
                 </ul>
                 <p style="color: #2ecc71; margin-top: 10px;">
                     <i class="fas fa-check-circle"></i> Dados carregados! Agora faça upload do CSV com os participantes.
