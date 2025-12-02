@@ -12,76 +12,38 @@ if (!isAdmin()) {
 header('Content-Type: application/json');
 
 try {
+    // Buscar palestras da tabela upcoming_announcements
+    // Usando a mesma query do arquivo palestras_agendadas.php
+    $stmt = $pdo->query("
+        SELECT 
+            id,
+            title,
+            speaker,
+            announcement_date,
+            lecture_time,
+            description,
+            image_path,
+            video_embed,
+            is_active
+        FROM upcoming_announcements
+        ORDER BY announcement_date DESC, lecture_time DESC
+    ");
+    
+    $lectures_data = $stmt->fetchAll(PDO::FETCH_ASSOC);
     $lectures = [];
     
-    // Tentar buscar da tabela upcoming_announcements primeiro
-    try {
-        $stmt = $pdo->prepare("
-            SELECT 
-                id,
-                title,
-                speaker,
-                announcement_date as date,
-                duration_hours
-            FROM upcoming_announcements 
-            WHERE announcement_date >= DATE_SUB(NOW(), INTERVAL 30 DAY)
-            ORDER BY announcement_date DESC
-            LIMIT 50
-        ");
-        
-        $stmt->execute();
-        $upcoming = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        
-        foreach ($upcoming as $lecture) {
-            if (!empty($lecture['date'])) {
-                $date = new DateTime($lecture['date']);
-                $lectures[] = [
-                    'id' => $lecture['id'],
-                    'title' => $lecture['title'] ?? 'Sem título',
-                    'speaker' => $lecture['speaker'] ?? 'Sem palestrante',
-                    'formatted_date' => $date->format('d/m/Y'),
-                    'date_input' => $date->format('Y-m-d'),
-                    'duration_hours' => floatval($lecture['duration_hours'] ?? 1)
-                ];
-            }
-        }
-    } catch (Exception $e) {
-        error_log("Erro ao buscar upcoming_announcements: " . $e->getMessage());
-    }
-    
-    // Se não encontrou nenhuma, tentar buscar da tabela lectures
-    if (empty($lectures)) {
-        try {
-            $stmt = $pdo->prepare("
-                SELECT 
-                    id,
-                    title,
-                    speaker,
-                    created_at as date,
-                    duration_minutes
-                FROM lectures 
-                ORDER BY created_at DESC
-                LIMIT 20
-            ");
-            
-            $stmt->execute();
-            $stored = $stmt->fetchAll(PDO::FETCH_ASSOC);
-            
-            foreach ($stored as $lecture) {
-                $date = !empty($lecture['date']) ? new DateTime($lecture['date']) : new DateTime();
-                $duration_hours = ($lecture['duration_minutes'] ?? 60) / 60;
-                
-                $lectures[] = [
-                    'id' => $lecture['id'],
-                    'title' => $lecture['title'] ?? 'Sem título',
-                    'speaker' => $lecture['speaker'] ?? 'Sem palestrante',
-                    'formatted_date' => $date->format('d/m/Y'),
-                    'date_input' => $date->format('Y-m-d'),
-                    'duration_hours' => $duration_hours
-                ];
-            }
-        } catch (Exception $e) {
-            error_log("Erro ao buscar lectures: " . $e->getMessage());
+    foreach ($lectures_data as $lecture) {
+        if (!empty($lecture['announcement_date'])) {
+            $date = new DateTime($lecture['announcement_date']);
+            $lectures[] = [
+                'id' => $lecture['id'],
+                'title' => $lecture['title'] ?? 'Sem título',
+                'speaker' => $lecture['speaker'] ?? 'Sem palestrante',
+                'formatted_date' => $date->format('d/m/Y'),
+                'date_input' => $date->format('Y-m-d'),
+                'lecture_time' => !empty($lecture['lecture_time']) ? substr($lecture['lecture_time'], 0, 5) : '19:00',
+                'description' => $lecture['description'] ?? ''
+            ];
         }
     }
     
@@ -92,12 +54,12 @@ try {
     ]);
     
 } catch (Exception $e) {
-    error_log("Erro geral: " . $e->getMessage());
+    error_log("Erro ao buscar palestras: " . $e->getMessage());
+    http_response_code(500);
     echo json_encode([
-        'success' => true,
-        'lectures' => [],
-        'count' => 0,
-        'debug' => $e->getMessage()
+        'success' => false,
+        'error' => 'Erro ao buscar palestras',
+        'message' => $e->getMessage()
     ]);
 }
 ?>
