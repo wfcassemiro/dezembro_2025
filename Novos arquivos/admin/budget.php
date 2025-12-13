@@ -123,35 +123,88 @@ function processAnalysisCSV($csvPath, $fileName) {
         // Pula linhas vazias
         if (empty($line)) continue;
         
-        // Detecta início da seção de dados
-        if (stripos($line, 'Type') !== false && stripos($line, 'Segments') !== false) {
-            $headers = str_getcsv($line, $delimiter);
+        // Detecta início da seção de dados (cabeçalho da tabela)
+        // Aceita tanto "Type Segments" quanto linhas com Tab ou espaços múltiplos
+        if (stripos($line, 'Type') !== false && 
+            (stripos($line, 'Segments') !== false || stripos($line, 'Source words') !== false)) {
+            $headers = preg_split('/\s{2,}|\t/', $line); // Split por múltiplos espaços ou tabs
             $inDataSection = true;
-            error_log("CSV $fileName: Cabeçalho encontrado na linha " . ($lineNum + 1));
+            error_log("CSV $fileName: Cabeçalho encontrado na linha " . ($lineNum + 1) . ": " . implode(' | ', $headers));
             continue;
         }
         
+        // Se não encontrou cabeçalho mas está processando, tenta detectar linhas de dados
+        // baseado em padrões conhecidos (Repetition, 100%, No match, etc)
+        if (!$inDataSection) {
+            $testType = strtolower(trim(explode(' ', $line)[0]));
+            if (in_array($testType, ['repetition', '101%', '100%', 'no', 'fragments']) ||
+                preg_match('/^\d+%/', $line) ||
+                preg_match('/^\d+%-\d+%/', $line)) {
+                $inDataSection = true;
+                error_log("CSV $fileName: Início de dados detectado automaticamente na linha " . ($lineNum + 1));
+            }
+        }
+        
         // Processa linhas de dados
-        if ($inDataSection && !preg_match('/^-+/', $line)) {
-            $data = str_getcsv($line, $delimiter);
+        if ($inDataSection && !preg_match('/^-{3,}/', $line)) {
+            // Tenta diferentes métodos de parse
+            $data = [];
             
-            // Debug: log da linha sendo processada
-            if ($dataLineCount < 3) {
-                error_log("CSV $fileName linha " . ($lineNum + 1) . ": " . count($data) . " colunas");
+            // Método 1: CSV padrão
+            $csvData = str_getcsv($line, $delimiter);
+            if (count($csvData) >= 3) {
+                $data = $csvData;
+            } else {
+                // Método 2: Split por espaços múltiplos ou tabs
+                $data = preg_split('/\s{2,}|\t/', $line);
+                $data = array_values(array_filter($data, function($v) { return trim($v) !== ''; }));
             }
             
-            // Verifica se tem dados suficientes (pelo menos 3 colunas)
-            if (count($data) < 3) continue;
+            // Debug: log da linha sendo processada
+            if ($dataLineCount < 5) {
+                error_log("CSV $fileName linha " . ($lineNum + 1) . ": " . count($data) . " colunas: " . json_encode($data));
+            }
+            
+            // Verifica se tem dados suficientes
+            if (count($data) < 2) continue;
             
             $matchType = trim($data[0]);
-            $segments = isset($data[1]) ? intval(str_replace([',', '.'], '', $data[1])) : 0;
             
-            // Tenta encontrar a coluna de palavras (pode estar na posição 2 ou 3)
+            // Pula linhas de cabeçalho ou totais
+            if (stripos($matchType, 'Type') !== false || 
+                stripos($matchType, 'All') !== false ||
+                stripos($matchType, 'Analysis') !== false) {
+                continue;
+            }
+            
+            // Extrai segmentos e palavras
+            $segments = 0;
             $words = 0;
-            if (isset($data[2]) && is_numeric(str_replace([',', '.'], '', $data[2]))) {
-                $words = intval(str_replace([',', '.'], '', $data[2]));
-            } elseif (isset($data[3]) && is_numeric(str_replace([',', '.'], '', $data[3]))) {
-                $words = intval(str_replace([',', '.'], '', $data[3]));
+            
+            // Procura por valores numéricos nas próximas colunas
+            for ($i = 1; $i < count($data); $i++) {
+                $value = str_replace([',', '.', ' '], '', $data[$i]);
+                if (is_numeric($value)) {
+                    $numValue = intval($value);
+                    if ($segments === 0) {
+                        $segments = $numValue;
+                    } elseif ($words === 0 && $numValue > $segments) {
+                        // Palavras geralmente são um número maior que segmentos
+                        $words = $numValue;
+                        break;
+                    }
+                }
+            }
+            
+            // Se não encontrou palavras, usa qualquer número maior que 0
+            if ($words === 0 && count($data) >= 3) {
+                for ($i = 2; $i < min(count($data), 5); $i++) {
+                    $value = str_replace([',', '.', ' '], '', $data[$i]);
+                    if (is_numeric($value) && intval($value) > 0) {
+                        $words = intval($value);
+                        break;
+                    }
+                }
             }
             
             // Normaliza o tipo de match
@@ -167,6 +220,10 @@ function processAnalysisCSV($csvPath, $fileName) {
                 $analysis['totalSegments'] += $segments;
                 $analysis['totalWords'] += $words;
                 $dataLineCount++;
+                
+                if ($dataLineCount <= 3) {
+                    error_log("CSV $fileName: Linha aceita - Type: $matchType ($normalizedType), Segments: $segments, Words: $words");
+                }
             }
         }
         
