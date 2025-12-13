@@ -191,31 +191,94 @@ function processAnalysisCSV($csvPath, $fileName) {
  */
 function normalizeMatchType($matchType) {
     $matchType = trim($matchType);
+    $matchTypeLower = strtolower($matchType);
     
     // Mapeia os tipos encontrados nos CSVs para as categorias de peso
     $typeMap = [
-        'Repetition' => 'Repetition',
-        'Repetitions' => 'Repetition',
-        'Rep' => 'Repetition',
+        // Repetition
+        'repetition' => 'Repetition',
+        'repetitions' => 'Repetition',
+        'rep' => 'Repetition',
+        'reps' => 'Repetition',
+        
+        // 101% / Context Match
         '101%' => '101%',
-        'Context Match' => '101%',
-        'CM' => '101%',
+        'context match' => '101%',
+        'cm' => '101%',
+        'context' => '101%',
+        
+        // 100%
         '100%' => '100%',
+        'perfect match' => '100%',
+        'exact match' => '100%',
+        
+        // 95-99%
         '95%-99%' => '95-99%',
         '95-99%' => '95-99%',
+        '95% - 99%' => '95-99%',
+        '95 - 99%' => '95-99%',
+        
+        // 85-94%
         '85%-94%' => '85-94%',
         '85-94%' => '85-94%',
+        '85% - 94%' => '85-94%',
+        '85 - 94%' => '85-94%',
+        
+        // 75-84%
         '75%-84%' => '75-84%',
         '75-84%' => '75-84%',
+        '75% - 84%' => '75-84%',
+        '75 - 84%' => '75-84%',
+        
+        // 50-74%
         '50%-74%' => '50-74%',
         '50-74%' => '50-74%',
-        'No match' => 'No Match',
-        'No Match' => 'No Match',
-        'New' => 'No Match',
-        'Fragments' => 'No Match',
+        '50% - 74%' => '50-74%',
+        '50 - 74%' => '50-74%',
+        
+        // No Match
+        'no match' => 'No Match',
+        'no-match' => 'No Match',
+        'new' => 'No Match',
+        'fragments' => 'No Match',
+        'fragment' => 'No Match',
     ];
     
-    return $typeMap[$matchType] ?? null;
+    // Tenta com o valor original primeiro
+    if (isset($typeMap[$matchType])) {
+        return $typeMap[$matchType];
+    }
+    
+    // Tenta com lowercase
+    if (isset($typeMap[$matchTypeLower])) {
+        return $typeMap[$matchTypeLower];
+    }
+    
+    // Tenta detectar por padrão de porcentagem
+    if (preg_match('/(\d+)%?\s*-\s*(\d+)%?/', $matchType, $matches)) {
+        $start = intval($matches[1]);
+        $end = intval($matches[2]);
+        
+        if ($start >= 95 && $end <= 99) return '95-99%';
+        if ($start >= 85 && $end <= 94) return '85-94%';
+        if ($start >= 75 && $end <= 84) return '75-84%';
+        if ($start >= 50 && $end <= 74) return '50-74%';
+    }
+    
+    // Tenta detectar porcentagem única
+    if (preg_match('/(\d+)%/', $matchType, $matches)) {
+        $percent = intval($matches[1]);
+        
+        if ($percent === 101) return '101%';
+        if ($percent === 100) return '100%';
+        if ($percent >= 95 && $percent <= 99) return '95-99%';
+        if ($percent >= 85 && $percent <= 94) return '85-94%';
+        if ($percent >= 75 && $percent <= 84) return '75-84%';
+        if ($percent >= 50 && $percent <= 74) return '50-74%';
+    }
+    
+    error_log("Tipo de match não reconhecido: '$matchType'");
+    return null;
 }
 
 /**
