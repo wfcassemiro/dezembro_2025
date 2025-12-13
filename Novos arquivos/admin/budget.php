@@ -81,18 +81,27 @@ if (!isset($_SESSION['budget_pdf_data'])) {
  * Função para processar CSV de análise de CAT Tool
  */
 function processAnalysisCSV($csvPath, $fileName) {
-    $handle = fopen($csvPath, 'r');
-    if (!$handle) {
-        throw new Exception('Não foi possível abrir o arquivo CSV');
+    // Tenta detectar o encoding do arquivo
+    $content = file_get_contents($csvPath);
+    if ($content === false) {
+        throw new Exception('Não foi possível ler o arquivo CSV');
     }
     
-    // Configuração para detectar encoding
-    $firstLine = fgets($handle);
-    rewind($handle);
+    // Remove BOM se existir
+    $content = preg_replace('/^\xEF\xBB\xBF/', '', $content);
     
-    // Detecta BOM UTF-8
-    if (substr($firstLine, 0, 3) === "\xEF\xBB\xBF") {
-        $firstLine = substr($firstLine, 3);
+    // Detecta encoding e converte para UTF-8
+    $encoding = mb_detect_encoding($content, ['UTF-8', 'ISO-8859-1', 'Windows-1252', 'ASCII'], true);
+    if ($encoding && $encoding !== 'UTF-8') {
+        $content = mb_convert_encoding($content, 'UTF-8', $encoding);
+        error_log("CSV $fileName convertido de $encoding para UTF-8");
+    }
+    
+    // Detecta o delimitador (vírgula ou ponto-e-vírgula)
+    $delimiter = ',';
+    if (substr_count($content, ';') > substr_count($content, ',')) {
+        $delimiter = ';';
+        error_log("CSV $fileName usa ponto-e-vírgula como delimitador");
     }
     
     $analysis = [
@@ -103,37 +112,52 @@ function processAnalysisCSV($csvPath, $fileName) {
         'weightedWordCount' => 0,
     ];
     
+    $lines = explode("\n", $content);
     $inDataSection = false;
     $headers = [];
+    $dataLineCount = 0;
     
-    while (($line = fgets($handle)) !== false) {
+    foreach ($lines as $lineNum => $line) {
         $line = trim($line);
         
         // Pula linhas vazias
         if (empty($line)) continue;
         
         // Detecta início da seção de dados
-        if (strpos($line, 'Type') !== false && strpos($line, 'Segments') !== false) {
-            $headers = str_getcsv($line);
+        if (stripos($line, 'Type') !== false && stripos($line, 'Segments') !== false) {
+            $headers = str_getcsv($line, $delimiter);
             $inDataSection = true;
+            error_log("CSV $fileName: Cabeçalho encontrado na linha " . ($lineNum + 1));
             continue;
         }
         
         // Processa linhas de dados
-        if ($inDataSection && !str_starts_with($line, '-')) {
-            $data = str_getcsv($line);
+        if ($inDataSection && !preg_match('/^-+/', $line)) {
+            $data = str_getcsv($line, $delimiter);
             
-            // Verifica se tem dados suficientes
+            // Debug: log da linha sendo processada
+            if ($dataLineCount < 3) {
+                error_log("CSV $fileName linha " . ($lineNum + 1) . ": " . count($data) . " colunas");
+            }
+            
+            // Verifica se tem dados suficientes (pelo menos 3 colunas)
             if (count($data) < 3) continue;
             
             $matchType = trim($data[0]);
-            $segments = isset($data[1]) ? intval($data[1]) : 0;
-            $words = isset($data[3]) ? intval($data[3]) : 0;
+            $segments = isset($data[1]) ? intval(str_replace([',', '.'], '', $data[1])) : 0;
+            
+            // Tenta encontrar a coluna de palavras (pode estar na posição 2 ou 3)
+            $words = 0;
+            if (isset($data[2]) && is_numeric(str_replace([',', '.'], '', $data[2]))) {
+                $words = intval(str_replace([',', '.'], '', $data[2]));
+            } elseif (isset($data[3]) && is_numeric(str_replace([',', '.'], '', $data[3]))) {
+                $words = intval(str_replace([',', '.'], '', $data[3]));
+            }
             
             // Normaliza o tipo de match
             $normalizedType = normalizeMatchType($matchType);
             
-            if ($normalizedType && $segments > 0) {
+            if ($normalizedType && $words > 0) {
                 $analysis['fuzzyMatches'][] = [
                     'category' => $normalizedType,
                     'segments' => $segments,
@@ -142,19 +166,21 @@ function processAnalysisCSV($csvPath, $fileName) {
                 
                 $analysis['totalSegments'] += $segments;
                 $analysis['totalWords'] += $words;
+                $dataLineCount++;
             }
         }
         
         // Para ao encontrar a linha de separação final
-        if (str_starts_with($line, '---')) {
+        if (preg_match('/^-{3,}/', $line)) {
+            error_log("CSV $fileName: Fim da seção de dados na linha " . ($lineNum + 1));
             break;
         }
     }
     
-    fclose($handle);
+    error_log("CSV $fileName: Total processado - $dataLineCount linhas, {$analysis['totalWords']} palavras, {$analysis['totalSegments']} segmentos");
     
     if ($analysis['totalWords'] === 0) {
-        throw new Exception('Nenhuma palavra encontrada no arquivo CSV');
+        throw new Exception("Nenhuma palavra encontrada no arquivo. Processadas $dataLineCount linhas de dados. Verifique o formato do CSV.");
     }
     
     return $analysis;
