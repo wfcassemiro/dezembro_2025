@@ -1976,10 +1976,30 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (data.success) {
                     markCardCompleted(cardArquivos);
                     enableCard(cardCustos);
+                    
+                    // Mostra avisos se houver
+                    if (data.warnings && data.warnings.length > 0) {
+                        alert('Processamento concluído com avisos:\n\n' + data.warnings.join('\n'));
+                    }
+                    
                     setTimeout(() => location.reload(), 1500);
                 } else {
-                    alert('Erro: ' + data.message);
+                    // Formata a mensagem de erro com quebras de linha
+                    const errorMsg = data.message.replace(/\\n/g, '\n');
+                    alert(errorMsg);
+                    
+                    // Log detalhado no console para debug
+                    if (data.errors && data.errors.length > 0) {
+                        console.error('Erros detalhados:', data.errors);
+                    }
                 }
+            })
+            .catch(error => {
+                clearInterval(interval);
+                progressContainer.style.display = 'none';
+                btnProcessCsv.disabled = false;
+                alert('Erro de conexão: ' + error.message);
+                console.error('Erro:', error);
             });
         });
     }
