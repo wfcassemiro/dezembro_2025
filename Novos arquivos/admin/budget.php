@@ -716,7 +716,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action'])) {
 // ==================== UPLOAD DE ARQUIVOS CSV ====================
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_files']) && !isset($_POST['ajax_action'])) {
     header('Content-Type: application/json');
-    $response = ['success' => false, 'message' => '', 'analyses' => []];
+    $response = ['success' => false, 'message' => '', 'analyses' => [], 'errors' => []];
     
     try {
         $files = $_FILES['csv_files'];
@@ -727,9 +727,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_files']) && !iss
         
         $processed_any = false;
         $fileCount = count($files['name']);
+        $errors = [];
+        
+        error_log("=== Iniciando processamento de $fileCount arquivo(s) CSV ===");
         
         for ($i = 0; $i < $fileCount; $i++) {
-            if ($files['error'][$i] !== UPLOAD_ERR_OK) continue;
+            if ($files['error'][$i] !== UPLOAD_ERR_OK) {
+                $errors[] = $files['name'][$i] . ": Erro no upload";
+                continue;
+            }
             
             $tmpName = $files['tmp_name'][$i];
             $fileName = $files['name'][$i];
@@ -737,8 +743,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_files']) && !iss
             // Verifica se é CSV
             $ext = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
             if ($ext !== 'csv') {
+                $errors[] = $fileName . ": Não é um arquivo CSV";
+                error_log("Arquivo $fileName ignorado: não é CSV");
                 continue;
             }
+            
+            error_log("Processando arquivo: $fileName");
             
             try {
                 $result = processAnalysisCSV($tmpName, $fileName);
@@ -759,9 +769,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_files']) && !iss
                     $_SESSION['analyses'][] = $result;
                     $response['analyses'][] = $result;
                     $processed_any = true;
+                    
+                    error_log("✓ Arquivo $fileName processado: {$result['totalWords']} palavras");
                 }
             } catch (Throwable $e) {
-                error_log("Erro ao processar CSV {$fileName}: " . $e->getMessage());
+                $errorMsg = $fileName . ": " . $e->getMessage();
+                $errors[] = $errorMsg;
+                error_log("✗ Erro ao processar CSV {$fileName}: " . $e->getMessage());
             } finally {
                 // Descarta o arquivo CSV após processamento
                 if (file_exists($tmpName)) {
@@ -775,11 +789,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_files']) && !iss
             $response['success'] = true;
             $response['message'] = 'Arquivos CSV processados';
             $response['next_step'] = 4;
+            
+            if (!empty($errors)) {
+                $response['warnings'] = $errors;
+            }
         } else {
-            throw new Exception('Nenhum arquivo CSV válido foi processado.');
+            $errorDetails = !empty($errors) ? "\n\nDetalhes:\n• " . implode("\n• ", $errors) : '';
+            throw new Exception('Nenhum arquivo CSV válido foi processado.' . $errorDetails . 
+                '\n\nVerifique:\n1. O arquivo é um CSV de análise de CAT Tool\n2. Contém as colunas: Type, Segments, Words\n3. Está em UTF-8 ou ISO-8859-1');
         }
+        
+        $response['errors'] = $errors;
     } catch (Throwable $e) {
         $response['message'] = $e->getMessage();
+        error_log("Erro geral no processamento: " . $e->getMessage());
     }
     
     header('Content-Type: application/json; charset=UTF-8');
