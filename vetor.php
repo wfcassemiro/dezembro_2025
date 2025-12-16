@@ -930,6 +930,16 @@ include __DIR__ . '/vision/includes/sidebar.php';
                             <span class="checkbox-mark"></span>
                             Legendagem
                         </label>
+                        <label class="custom-checkbox">
+                            <input type="checkbox" name="roles[]" value="Localização" <?= in_array('Localização', $roles) ? 'checked' : '' ?>>
+                            <span class="checkbox-mark"></span>
+                            Localização
+                        </label>
+                        <label class="custom-checkbox">
+                            <input type="checkbox" name="roles[]" value="Revisão" <?= in_array('Revisão', $roles) ? 'checked' : '' ?>>
+                            <span class="checkbox-mark"></span>
+                            Revisão
+                        </label>
                     </div>
                 </div>
 
@@ -958,27 +968,94 @@ include __DIR__ . '/vision/includes/sidebar.php';
                         <label class="custom-checkbox">
                             <input type="checkbox" name="specs[]" value="Games" <?= in_array('Games', $specs) ? 'checked' : '' ?>>
                             <span class="checkbox-mark"></span>
-                            Games / Loc
+                            Games / Jogos
+                        </label>
+                        <label class="custom-checkbox">
+                            <input type="checkbox" name="specs[]" value="Audiovisual" <?= in_array('Audiovisual', $specs) ? 'checked' : '' ?>>
+                            <span class="checkbox-mark"></span>
+                            Audiovisual (TAV)
+                        </label>
+                        <label class="custom-checkbox">
+                            <input type="checkbox" name="specs[]" value="Marketing" <?= in_array('Marketing', $specs) ? 'checked' : '' ?>>
+                            <span class="checkbox-mark"></span>
+                            Marketing
+                        </label>
+                        <label class="custom-checkbox">
+                            <input type="checkbox" name="specs[]" value="Técnica" <?= in_array('Técnica', $specs) ? 'checked' : '' ?>>
+                            <span class="checkbox-mark"></span>
+                            Técnica
+                        </label>
+                        <label class="custom-checkbox">
+                            <input type="checkbox" name="specs[]" value="Científica" <?= in_array('Científica', $specs) ? 'checked' : '' ?>>
+                            <span class="checkbox-mark"></span>
+                            Científica
+                        </label>
+                        <label class="custom-checkbox">
+                            <input type="checkbox" name="specs[]" value="Turismo" <?= in_array('Turismo', $specs) ? 'checked' : '' ?>>
+                            <span class="checkbox-mark"></span>
+                            Turismo
+                        </label>
+                        <label class="custom-checkbox">
+                            <input type="checkbox" name="specs[]" value="Financeira" <?= in_array('Financeira', $specs) ? 'checked' : '' ?>>
+                            <span class="checkbox-mark"></span>
+                            Financeira
                         </label>
                     </div>
                 </div>
 
-                <!-- Coluna 3: Nível -->
+                <!-- Coluna 3: Temas/Tecnologias -->
+                <div class="filter-column">
+                    <span class="filter-section-title">
+                        <i class="fas fa-microchip"></i>
+                        Temas / Tecnologias
+                    </span>
+                    <div class="custom-checkbox-wrapper">
+                        <label class="custom-checkbox">
+                            <input type="checkbox" name="themes[]" value="IA" <?= in_array('IA', $themes) ? 'checked' : '' ?>>
+                            <span class="checkbox-mark"></span>
+                            IA / Inteligência Artificial
+                        </label>
+                        <label class="custom-checkbox">
+                            <input type="checkbox" name="themes[]" value="CAT" <?= in_array('CAT', $themes) ? 'checked' : '' ?>>
+                            <span class="checkbox-mark"></span>
+                            CAT Tools
+                        </label>
+                        <label class="custom-checkbox">
+                            <input type="checkbox" name="themes[]" value="Ferramentas" <?= in_array('Ferramentas', $themes) ? 'checked' : '' ?>>
+                            <span class="checkbox-mark"></span>
+                            Ferramentas
+                        </label>
+                        <label class="custom-checkbox">
+                            <input type="checkbox" name="themes[]" value="Carreira" <?= in_array('Carreira', $themes) ? 'checked' : '' ?>>
+                            <span class="checkbox-mark"></span>
+                            Carreira
+                        </label>
+                        <label class="custom-checkbox">
+                            <input type="checkbox" name="themes[]" value="Negócios" <?= in_array('Negócios', $themes) ? 'checked' : '' ?>>
+                            <span class="checkbox-mark"></span>
+                            Negócios
+                        </label>
+                        <label class="custom-checkbox">
+                            <input type="checkbox" name="themes[]" value="Gestão" <?= in_array('Gestão', $themes) ? 'checked' : '' ?>>
+                            <span class="checkbox-mark"></span>
+                            Gestão de Projetos
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Coluna 4: Nível e Palavra-Chave -->
                 <div class="filter-column">
                     <span class="filter-section-title">
                         <i class="fas fa-layer-group"></i>
                         Nível
                     </span>
-                    <select name="level" class="form-select-custom">
+                    <select name="level" class="form-select-custom" style="margin-bottom: 20px;">
                         <option value="">Todos os níveis</option>
                         <option value="Iniciante" <?= $level=='Iniciante'?'selected':'' ?>>Iniciante</option>
                         <option value="Intermediário" <?= $level=='Intermediário'?'selected':'' ?>>Intermediário</option>
                         <option value="Avançado" <?= $level=='Avançado'?'selected':'' ?>>Avançado</option>
                     </select>
-                </div>
-
-                <!-- Coluna 4: Palavra-Chave -->
-                <div class="filter-column">
+                    
                     <span class="filter-section-title">
                         <i class="fas fa-key"></i>
                         Palavra-Chave (Obrigatória)
