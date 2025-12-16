@@ -273,6 +273,15 @@ include __DIR__ . '/vision/includes/head.php';
 ?>
 
 <style>
+/* Scroll suave */
+html {
+    scroll-behavior: smooth;
+}
+
+#resultados {
+    scroll-margin-top: 20px;
+}
+
 /* Identidade visual do videoteca.php mantida */
 .vetor-hero {
     background: var(--glass-bg);
