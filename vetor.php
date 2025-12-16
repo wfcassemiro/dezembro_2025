@@ -1091,8 +1091,37 @@ include __DIR__ . '/vision/includes/sidebar.php';
 
             <!-- Grid de Vídeos -->
             <div class="video-grid video-grid-four">
-                <?php foreach ($paged_results as $lecture): ?>
+                <?php foreach ($paged_results as $lecture): 
+                    // Calcula a porcentagem e o nível de cor do gráfico
+                    $max_score = 50; // Pontuação máxima esperada (15+15+10+8+5)
+                    $percentage = min(100, ($lecture['relevance'] / $max_score) * 100);
+                    
+                    // Define o nível de cor baseado na pontuação
+                    if ($lecture['relevance'] < 20) {
+                        $color_level = 'very-low';
+                    } elseif ($lecture['relevance'] < 30) {
+                        $color_level = 'low';
+                    } elseif ($lecture['relevance'] < 40) {
+                        $color_level = 'medium';
+                    } elseif ($lecture['relevance'] < 50) {
+                        $color_level = 'high';
+                    } else {
+                        $color_level = 'very-high';
+                    }
+                ?>
                     <div class="video-card" onclick="location.href='/palestra.php?id=<?php echo $lecture['id']; ?>'">
+                        <!-- Gráfico de Relevância Vertical -->
+                        <div class="relevance-bar-container">
+                            <div class="relevance-bar" 
+                                 data-level="<?= $color_level ?>" 
+                                 style="height: <?= $percentage ?>%;"></div>
+                        </div>
+                        
+                        <!-- Tooltip com pontuação -->
+                        <div class="relevance-tooltip">
+                            Match: <?= $lecture['relevance'] ?> pontos
+                        </div>
+                        
                         <div class="video-thumb-container">
                             <div class="video-thumb">
                                 <?php if (!empty($lecture['thumbnail_url'])): ?>
@@ -1105,11 +1134,6 @@ include __DIR__ . '/vision/includes/sidebar.php';
                                         <span class="placeholder-text">Palestra</span>
                                     </div>
                                 <?php endif; ?>
-                                
-                                <!-- Badge de Relevância -->
-                                <span class="relevance-badge">
-                                    <i class="fas fa-star"></i> <?= $lecture['relevance'] ?> pts
-                                </span>
                                 
                                 <div class="video-overlay">
                                     <div class="play-button">
