@@ -67,133 +67,166 @@ if ($is_logged_in && isset($pdo)) {
 }
 
 // ==========================================
-// 3. MOTOR DE RECOMENDAÇÃO + PAGINAÇÃO
+// 3. MOTOR DE RECOMENDAÇÃO MELHORADO
 // ==========================================
 
 // Inputs
 $roles = $_POST['roles'] ?? [];       
 $specs = $_POST['specs'] ?? [];       
-$themes = $_POST['themes'] ?? [];     // Novo: Temas/Tecnologias
-$level = $_POST['level'] ?? '';       
+$themes = $_POST['themes'] ?? [];
 $interest = $_POST['interest'] ?? ''; 
 $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
 if ($page < 1) $page = 1;
-$limit = 18; // Máximo por página
+$limit = 18;
 
 $results = [];
 $searched = false;
 $total_results = 0;
 $total_pages = 0;
 $paged_results = [];
+$error_msg = '';
+$validation_error = '';
 
 // Mantém filtros na sessão para paginação
 if ($_SERVER['REQUEST_METHOD'] === 'POST' || isset($_GET['page'])) {
     $searched = true;
     
-    // Recupera filtros da sessão se for navegação de página
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $_SESSION['vetor_filters'] = [
             'roles' => $roles,
             'specs' => $specs,
             'themes' => $themes,
-            'level' => $level,
             'interest' => $interest
         ];
     } elseif (isset($_SESSION['vetor_filters'])) {
         $roles = $_SESSION['vetor_filters']['roles'];
         $specs = $_SESSION['vetor_filters']['specs'];
         $themes = $_SESSION['vetor_filters']['themes'] ?? [];
-        $level = $_SESSION['vetor_filters']['level'];
         $interest = $_SESSION['vetor_filters']['interest'];
     }
 
-    $sql = "SELECT *, 0 as relevance FROM lectures WHERE 1=1";
-    $params = [];
+    // ==========================================
+    // VALIDAÇÃO: MÍNIMO DE 3 CAMPOS
+    // ==========================================
+    $total_selections = count($roles) + count($specs) + count($themes);
+    if (!empty($interest)) $total_selections++;
 
-    if (!empty($level)) {
-        $sql .= " AND level = ?"; 
-        $params[] = $level;
-    }
+    if ($total_selections < 3) {
+        $validation_error = "Por favor, selecione pelo menos 3 campos para gerar recomendações mais precisas.";
+    } else {
+        $sql = "SELECT *, 0 as relevance FROM lectures WHERE 1=1";
+        $params = [];
 
-    try {
-        $stmt = $pdo->prepare($sql);
-        $stmt->execute($params);
-        $candidates = $stmt->fetchAll();
+        try {
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute($params);
+            $candidates = $stmt->fetchAll();
 
-        // ==========================================
-        // ALGORITMO DE PONTUAÇÃO AJUSTADO
-        // Sistema de Pontos:
-        // - Área de Atuação (Roles): 10 pontos cada
-        // - Especialidade (Specs): 15 pontos cada
-        // - Temas/Tecnologias (Themes): 8 pontos cada
-        // - Palavra-chave (Interest): 5 pontos (obrigatória se preenchida)
-        // - Threshold mínimo: 20 pontos
-        // ==========================================
-        foreach ($candidates as $row) {
-            $score = 0;
-            $corpus = mb_strtolower($row['title'] . ' ' . $row['description'] . ' ' . $row['tags'] . ' ' . $row['category']);
+            // ==========================================
+            // ALGORITMO DE PONTUAÇÃO APRIMORADO
+            // ==========================================
+            foreach ($candidates as $row) {
+                $score = 0;
+                
+                // Corpus com peso na descrição
+                $title = mb_strtolower($row['title']);
+                $description = mb_strtolower($row['description']);
+                $tags = mb_strtolower($row['tags']);
+                $category = mb_strtolower($row['category']);
 
-            // ⚠️ LÓGICA E PARA PALAVRA-CHAVE (OBRIGATÓRIA)
-            // Se o usuário digitou uma palavra-chave, ela DEVE estar presente
-            if (!empty($interest)) {
-                $interest_lower = mb_strtolower(trim($interest));
-                if (strpos($corpus, $interest_lower) === false) {
-                    // Palavra-chave não encontrada = DESCARTA este resultado
-                    continue; // Pula para a próxima palestra
+                // ⚠️ PALAVRA-CHAVE (Obrigatória se preenchida)
+                if (!empty($interest)) {
+                    $interest_lower = mb_strtolower(trim($interest));
+                    $found_interest = false;
+                    
+                    // Busca no título (peso maior)
+                    if (strpos($title, $interest_lower) !== false) {
+                        $score += 15;
+                        $found_interest = true;
+                    }
+                    // Busca na descrição (peso médio)
+                    elseif (strpos($description, $interest_lower) !== false) {
+                        $score += 10;
+                        $found_interest = true;
+                    }
+                    // Busca nas tags/categoria (peso menor)
+                    elseif (strpos($tags . ' ' . $category, $interest_lower) !== false) {
+                        $score += 5;
+                        $found_interest = true;
+                    }
+                    
+                    // Se não encontrou a palavra-chave, descarta
+                    if (!$found_interest) {
+                        continue;
+                    }
                 }
-                // Se chegou aqui, a palavra-chave está presente
-                $score += 5;
+
+                // Pontuação baseada em Roles (Área de Atuação)
+                foreach ($roles as $role) {
+                    $role_lower = mb_strtolower($role);
+                    if (strpos($title, $role_lower) !== false) {
+                        $score += 12; // Título
+                    } elseif (strpos($description, $role_lower) !== false) {
+                        $score += 8; // Descrição
+                    } elseif (strpos($tags . ' ' . $category, $role_lower) !== false) {
+                        $score += 5; // Tags/Categoria
+                    }
+                }
+                
+                // Pontuação baseada em Specs (Especialidade)
+                foreach ($specs as $spec) {
+                    $spec_lower = mb_strtolower($spec);
+                    if (strpos($title, $spec_lower) !== false) {
+                        $score += 20; // Título (peso alto)
+                    } elseif (strpos($description, $spec_lower) !== false) {
+                        $score += 12; // Descrição
+                    } elseif (strpos($tags . ' ' . $category, $spec_lower) !== false) {
+                        $score += 8; // Tags/Categoria
+                    }
+                }
+                
+                // Pontuação baseada em Themes (Temas/Tecnologias)
+                foreach ($themes as $theme) {
+                    $theme_lower = mb_strtolower($theme);
+                    if (strpos($title, $theme_lower) !== false) {
+                        $score += 10; // Título
+                    } elseif (strpos($description, $theme_lower) !== false) {
+                        $score += 6; // Descrição
+                    } elseif (strpos($tags . ' ' . $category, $theme_lower) !== false) {
+                        $score += 4; // Tags/Categoria
+                    }
+                }
+
+                // Threshold mínimo de 15 pontos
+                if ($score >= 15) {
+                    $row['relevance'] = $score;
+                    $results[] = $row;
+                }
             }
 
-            // Pontuação baseada em Roles (Área de Atuação) - Peso 10
-            foreach ($roles as $role) {
-                if (strpos($corpus, mb_strtolower($role)) !== false) $score += 10;
-            }
-            
-            // Pontuação baseada em Specs (Especialidade) - Peso 15
-            foreach ($specs as $spec) {
-                if (strpos($corpus, mb_strtolower($spec)) !== false) $score += 15;
-            }
-            
-            // Pontuação baseada em Themes (Temas/Tecnologias) - Peso 8
-            foreach ($themes as $theme) {
-                if (strpos($corpus, mb_strtolower($theme)) !== false) $score += 8;
-            }
+            // Ordenar por relevância
+            usort($results, function($a, $b) { return $b['relevance'] <=> $a['relevance']; });
 
-            // ⚠️ THRESHOLD MÍNIMO DE 20 PONTOS
-            // Só inclui resultados com pontuação >= 20
-            if ($score >= 20) {
-                $row['relevance'] = $score;
-                $results[] = $row;
-            }
+            // Paginação
+            $total_results = count($results);
+            $total_pages = ceil($total_results / $limit);
+            $offset = ($page - 1) * $limit;
+            $paged_results = array_slice($results, $offset, $limit);
+
+        } catch (Exception $e) {
+            $error_msg = "Erro ao buscar palestras.";
         }
-
-        // Ordenar por relevância
-        usort($results, function($a, $b) { return $b['relevance'] <=> $a['relevance']; });
-
-        // Paginação Array Slice
-        $total_results = count($results);
-        $total_pages = ceil($total_results / $limit);
-        $offset = ($page - 1) * $limit;
-        $paged_results = array_slice($results, $offset, $limit);
-
-    } catch (Exception $e) {
-        $error_msg = "Erro ao buscar palestras.";
     }
 }
 
-$page_title = 'Recomendador Inteligente - Translators101';
+$page_title = 'Vetor-T101 - Translators101';
 $page_description = 'Encontre o conteúdo ideal com nossa IA de recomendação';
 
 include __DIR__ . '/vision/includes/head.php';
 ?>
 
 <style>
-/* =========================================
-   IDENTIDADE VISUAL DO VIDEOTECA.PHP
-   ========================================= */
-
-/* Estilos base - Glassmorphism */
+/* Identidade visual do videoteca.php mantida */
 .vetor-hero {
     background: var(--glass-bg);
     backdrop-filter: blur(20px);
@@ -220,7 +253,59 @@ include __DIR__ . '/vision/includes/head.php';
     margin: 0;
 }
 
-/* Seção de Filtros com identidade visual do videoteca */
+/* Perguntas guiadas */
+.guided-questions {
+    background: linear-gradient(135deg, rgba(142, 68, 173, 0.2), rgba(94, 51, 112, 0.2));
+    border: 2px solid var(--brand-purple);
+    border-radius: 16px;
+    padding: 25px;
+    margin-bottom: 30px;
+}
+
+.guided-questions h3 {
+    color: var(--accent-gold);
+    font-size: 1.3rem;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.question-item {
+    background: rgba(255, 255, 255, 0.05);
+    border-left: 4px solid var(--brand-purple);
+    padding: 15px 20px;
+    margin-bottom: 15px;
+    border-radius: 8px;
+    color: #ffffff;
+    font-size: 1rem;
+    line-height: 1.6;
+}
+
+.question-item strong {
+    color: var(--accent-gold);
+}
+
+/* Alerta de validação */
+.validation-alert {
+    background: linear-gradient(135deg, rgba(231, 76, 60, 0.2), rgba(192, 57, 43, 0.2));
+    border: 2px solid #e74c3c;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 20px;
+    color: #ffffff;
+    font-size: 1.1rem;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.validation-alert i {
+    font-size: 2rem;
+    color: #e74c3c;
+}
+
+/* Seção de Filtros */
 .videoteca-filtros {
     margin-bottom: 30px;
     background: var(--glass-bg);
@@ -245,7 +330,7 @@ include __DIR__ . '/vision/includes/head.php';
 
 .filter-grid {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(3, 1fr);
     gap: 25px;
     margin-bottom: 25px;
 }
@@ -267,14 +352,12 @@ include __DIR__ . '/vision/includes/head.php';
     flex-direction: column;
 }
 
-/* Checkboxes customizados estilo videoteca */
 .custom-checkbox-wrapper {
     display: flex;
     flex-direction: column;
     gap: 10px;
 }
 
-/* Duas colunas para Especialidades */
 .custom-checkbox-wrapper.two-columns {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
@@ -285,25 +368,6 @@ include __DIR__ . '/vision/includes/head.php';
     .custom-checkbox-wrapper.two-columns {
         grid-template-columns: 1fr;
     }
-}
-
-/* Scrollbar customizada */
-.custom-checkbox-wrapper::-webkit-scrollbar {
-    width: 6px;
-}
-
-.custom-checkbox-wrapper::-webkit-scrollbar-track {
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 10px;
-}
-
-.custom-checkbox-wrapper::-webkit-scrollbar-thumb {
-    background: var(--brand-purple);
-    border-radius: 10px;
-}
-
-.custom-checkbox-wrapper::-webkit-scrollbar-thumb:hover {
-    background: var(--brand-purple-light);
 }
 
 .custom-checkbox {
@@ -365,9 +429,7 @@ include __DIR__ . '/vision/includes/head.php';
     opacity: 1;
 }
 
-/* Input de texto e select */
-.search-input-large,
-.form-select-custom {
+.search-input-large {
     width: 100%;
     padding: 12px 16px;
     border-radius: 10px;
@@ -384,20 +446,20 @@ include __DIR__ . '/vision/includes/head.php';
     color: rgba(255, 255, 255, 0.6);
 }
 
-.search-input-large:focus,
-.form-select-custom:focus {
+.search-input-large:focus {
     outline: none;
     border-color: var(--brand-purple);
     background: rgba(255, 255, 255, 0.25);
     box-shadow: 0 0 0 3px rgba(142, 68, 173, 0.3);
 }
 
-.form-select-custom option {
-    background: #2c3e50;
-    color: #ffffff;
+/* Botões de ação */
+.action-buttons {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
 }
 
-/* Botão de busca */
 .search-btn-full {
     width: 100%;
     padding: 14px;
@@ -422,7 +484,30 @@ include __DIR__ . '/vision/includes/head.php';
     transform: translateY(-2px);
 }
 
-/* Seção de resultados */
+.clear-btn {
+    width: 100%;
+    padding: 14px;
+    font-size: 1.1rem;
+    font-weight: bold;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #e74c3c, #c0392b);
+    color: #fff;
+    border: none;
+    cursor: pointer;
+    box-shadow: 0 6px 18px rgba(231, 76, 60, 0.6);
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+}
+
+.clear-btn:hover {
+    background: linear-gradient(135deg, #c0392b, #e74c3c);
+    box-shadow: 0 8px 22px rgba(231, 76, 60, 0.8);
+    transform: translateY(-2px);
+}
+
 .results-header {
     background: var(--glass-bg);
     backdrop-filter: blur(20px);
@@ -445,7 +530,6 @@ include __DIR__ . '/vision/includes/head.php';
     color: var(--accent-gold);
 }
 
-/* Grid de vídeos - mesmo estilo do videoteca.php */
 .video-grid-four {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
@@ -471,7 +555,6 @@ include __DIR__ . '/vision/includes/head.php';
     }
 }
 
-/* Cards de vídeo - identidade videoteca.php */
 .video-card {
     background: var(--glass-bg);
     backdrop-filter: blur(20px);
@@ -490,6 +573,61 @@ include __DIR__ . '/vision/includes/head.php';
     border-color: var(--brand-purple);
     box-shadow: 0 20px 40px rgba(142, 68, 173, 0.6);
     transform: translateY(-5px);
+}
+
+/* BOLINHA DE RELEVÂNCIA */
+.relevance-badge {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    z-index: 20;
+    cursor: help;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+}
+
+.relevance-badge[data-level="very-low"] {
+    background: #3498db;
+}
+
+.relevance-badge[data-level="low"] {
+    background: #1abc9c;
+}
+
+.relevance-badge[data-level="medium"] {
+    background: #2ecc71;
+}
+
+.relevance-badge[data-level="high"] {
+    background: #f39c12;
+}
+
+.relevance-badge[data-level="very-high"] {
+    background: #e74c3c;
+}
+
+.relevance-tooltip {
+    position: absolute;
+    top: 12px;
+    right: 38px;
+    background: rgba(0, 0, 0, 0.9);
+    color: white;
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+    z-index: 25;
+    white-space: nowrap;
+}
+
+.relevance-badge:hover + .relevance-tooltip {
+    opacity: 1;
 }
 
 .video-thumb-container {
@@ -539,74 +677,6 @@ include __DIR__ . '/vision/includes/head.php';
     margin-bottom: 10px;
 }
 
-/* Gráfico de Relevância Vertical */
-.relevance-bar-container {
-    position: absolute;
-    left: 0;
-    top: 0;
-    height: 100%;
-    width: 8px;
-    background: rgba(0, 0, 0, 0.3);
-    border-top-left-radius: 16px;
-    border-bottom-left-radius: 16px;
-    overflow: hidden;
-    z-index: 30;
-    pointer-events: none;
-}
-
-.relevance-bar {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    width: 100%;
-    transition: height 0.5s ease;
-    box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
-}
-
-/* Gradiente de cor baseado na relevância */
-.relevance-bar[data-level="very-low"] {
-    background: linear-gradient(to top, #3498db, #5dade2);
-}
-
-.relevance-bar[data-level="low"] {
-    background: linear-gradient(to top, #1abc9c, #48c9b0);
-}
-
-.relevance-bar[data-level="medium"] {
-    background: linear-gradient(to top, #2ecc71, #58d68d);
-}
-
-.relevance-bar[data-level="high"] {
-    background: linear-gradient(to top, #f39c12, #f8c471);
-}
-
-.relevance-bar[data-level="very-high"] {
-    background: linear-gradient(to top, #e74c3c, #ec7063);
-}
-
-/* Tooltip de pontuação */
-.relevance-tooltip {
-    position: absolute;
-    top: 10px;
-    left: 15px;
-    background: rgba(0, 0, 0, 0.85);
-    color: white;
-    padding: 5px 10px;
-    border-radius: 6px;
-    font-size: 0.75rem;
-    font-weight: 700;
-    opacity: 0;
-    transition: opacity 0.3s ease;
-    pointer-events: none;
-    z-index: 35;
-    white-space: nowrap;
-}
-
-.video-card:hover .relevance-tooltip {
-    opacity: 1;
-}
-
-/* Overlay de play */
 .video-overlay {
     position: absolute;
     top: 0;
@@ -643,7 +713,6 @@ include __DIR__ . '/vision/includes/head.php';
     transform: scale(1.1);
 }
 
-/* Info do vídeo */
 .video-info {
     display: flex;
     flex-direction: column;
@@ -708,7 +777,6 @@ include __DIR__ . '/vision/includes/head.php';
     text-transform: capitalize;
 }
 
-/* Watchlist section */
 .watchlist-section {
     margin-top: auto;
     padding-top: 15px;
@@ -783,7 +851,6 @@ include __DIR__ . '/vision/includes/head.php';
     margin-right: 6px;
 }
 
-/* Paginação */
 .pagination-wrapper {
     display: flex;
     justify-content: center;
@@ -821,7 +888,6 @@ include __DIR__ . '/vision/includes/head.php';
     box-shadow: 0 4px 12px rgba(142, 68, 173, 0.6);
 }
 
-/* Estado vazio */
 .empty-state {
     text-align: center;
     padding: 60px 20px;
@@ -853,7 +919,6 @@ include __DIR__ . '/vision/includes/head.php';
     line-height: 1.6;
 }
 
-/* CTA Premium */
 .premium-cta {
     background: linear-gradient(135deg, rgba(142, 68, 173, 0.9), rgba(94, 51, 112, 0.9));
     backdrop-filter: blur(20px);
@@ -899,7 +964,6 @@ include __DIR__ . '/vision/includes/head.php';
     transform: translateY(-3px);
 }
 
-/* Mensagem inicial (antes de buscar) */
 .initial-message {
     text-align: center;
     padding: 80px 20px;
@@ -923,7 +987,7 @@ include __DIR__ . '/vision/includes/head.php';
     font-size: 1.3rem;
     color: var(--text-secondary);
     max-width: 600px;
-    margin: 0 auto;
+    margin: 0 auto 30px;
     line-height: 1.6;
 }
 </style>
@@ -938,14 +1002,41 @@ include __DIR__ . '/vision/includes/sidebar.php';
     <div class="vetor-hero fade-item">
         <h1>
             <i class="fas fa-brain"></i>
-            Recomendador Inteligente
+            Vetor-T101
         </h1>
-        <p>Encontre o conteúdo ideal com nossa IA de recomendação</p>
+        <p>Encontre o conteúdo ideal com nossa IA de recomendação aprimorada</p>
     </div>
+
+    <!-- Perguntas Guiadas -->
+    <?php if (!$searched): ?>
+    <div class="guided-questions fade-item">
+        <h3><i class="fas fa-lightbulb"></i> Dicas para melhores recomendações</h3>
+        <div class="question-item">
+            <strong>1.</strong> Em qual área você atua principalmente? (Tradução, Interpretação, Localização...)
+        </div>
+        <div class="question-item">
+            <strong>2.</strong> Qual é sua especialidade? (Jurídica, Médica, Literária, Games...)
+        </div>
+        <div class="question-item">
+            <strong>3.</strong> Quais temas interessam você? (IA, Ferramentas, Carreira, Negócios...)
+        </div>
+        <div class="question-item">
+            <strong>💡 Selecione pelo menos 3 campos</strong> para receber recomendações mais precisas e relevantes!
+        </div>
+    </div>
+    <?php endif; ?>
+
+    <!-- Alerta de Validação -->
+    <?php if (!empty($validation_error)): ?>
+    <div class="validation-alert fade-item">
+        <i class="fas fa-exclamation-triangle"></i>
+        <div><?= htmlspecialchars($validation_error) ?></div>
+    </div>
+    <?php endif; ?>
 
     <!-- Seção de Filtros -->
     <div class="videoteca-filtros fade-item">
-        <form method="POST" action="vetor.php">
+        <form method="POST" action="vetor.php" id="filterForm">
             <div class="filter-grid">
                 
                 <!-- Coluna 1: Área de Atuação -->
@@ -998,7 +1089,7 @@ include __DIR__ . '/vision/includes/sidebar.php';
                         <label class="custom-checkbox">
                             <input type="checkbox" name="specs[]" value="Médica" <?= in_array('Médica', $specs) ? 'checked' : '' ?>>
                             <span class="checkbox-mark"></span>
-                            Médica / Saúde
+                            Saúde
                         </label>
                         <label class="custom-checkbox">
                             <input type="checkbox" name="specs[]" value="Literária" <?= in_array('Literária', $specs) ? 'checked' : '' ?>>
@@ -1008,12 +1099,12 @@ include __DIR__ . '/vision/includes/sidebar.php';
                         <label class="custom-checkbox">
                             <input type="checkbox" name="specs[]" value="Games" <?= in_array('Games', $specs) ? 'checked' : '' ?>>
                             <span class="checkbox-mark"></span>
-                            Games / Jogos
+                            Games
                         </label>
                         <label class="custom-checkbox">
                             <input type="checkbox" name="specs[]" value="Audiovisual" <?= in_array('Audiovisual', $specs) ? 'checked' : '' ?>>
                             <span class="checkbox-mark"></span>
-                            Audiovisual (TAV)
+                            Audiovisual
                         </label>
                         <label class="custom-checkbox">
                             <input type="checkbox" name="specs[]" value="Marketing" <?= in_array('Marketing', $specs) ? 'checked' : '' ?>>
@@ -1043,7 +1134,7 @@ include __DIR__ . '/vision/includes/sidebar.php';
                     </div>
                 </div>
 
-                <!-- Coluna 3: Temas/Tecnologias -->
+                <!-- Coluna 3: Temas/Tecnologias e Palavra-Chave -->
                 <div class="filter-column">
                     <span class="filter-section-title">
                         <i class="fas fa-microchip"></i>
@@ -1053,15 +1144,10 @@ include __DIR__ . '/vision/includes/sidebar.php';
                         <label class="custom-checkbox">
                             <input type="checkbox" name="themes[]" value="IA" <?= in_array('IA', $themes) ? 'checked' : '' ?>>
                             <span class="checkbox-mark"></span>
-                            IA / Inteligência Artificial
+                            Inteligência Artificial
                         </label>
                         <label class="custom-checkbox">
-                            <input type="checkbox" name="themes[]" value="CAT" <?= in_array('CAT', $themes) ? 'checked' : '' ?>>
-                            <span class="checkbox-mark"></span>
-                            CAT Tools
-                        </label>
-                        <label class="custom-checkbox">
-                            <input type="checkbox" name="themes[]" value="Ferramentas" <?= in_array('Ferramentas', $themes) ? 'checked' : '' ?>>
+                            <input type="checkbox" name="themes[]" value="Ferramentas" <?= in_array('Ferramentas', $themes) || in_array('CAT', $themes) ? 'checked' : '' ?>>
                             <span class="checkbox-mark"></span>
                             Ferramentas
                         </label>
@@ -1078,27 +1164,13 @@ include __DIR__ . '/vision/includes/sidebar.php';
                         <label class="custom-checkbox">
                             <input type="checkbox" name="themes[]" value="Gestão" <?= in_array('Gestão', $themes) ? 'checked' : '' ?>>
                             <span class="checkbox-mark"></span>
-                            Gestão de Projetos
+                            Gestão de projetos
                         </label>
                     </div>
-                </div>
-
-                <!-- Coluna 4: Nível e Palavra-Chave -->
-                <div class="filter-column">
-                    <span class="filter-section-title">
-                        <i class="fas fa-layer-group"></i>
-                        Nível
-                    </span>
-                    <select name="level" class="form-select-custom" style="margin-bottom: 20px;">
-                        <option value="">Todos os níveis</option>
-                        <option value="Iniciante" <?= $level=='Iniciante'?'selected':'' ?>>Iniciante</option>
-                        <option value="Intermediário" <?= $level=='Intermediário'?'selected':'' ?>>Intermediário</option>
-                        <option value="Avançado" <?= $level=='Avançado'?'selected':'' ?>>Avançado</option>
-                    </select>
                     
-                    <span class="filter-section-title">
+                    <span class="filter-section-title" style="margin-top: 20px;">
                         <i class="fas fa-key"></i>
-                        Palavra-Chave (Obrigatória)
+                        Palavra-Chave (Opcional)
                     </span>
                     <input type="text" 
                            name="interest" 
@@ -1109,16 +1181,22 @@ include __DIR__ . '/vision/includes/sidebar.php';
 
             </div>
 
-            <!-- Botão de Busca -->
-            <button type="submit" class="search-btn-full">
-                <i class="fas fa-search"></i>
-                Buscar Recomendações
-            </button>
+            <!-- Botões de Ação -->
+            <div class="action-buttons">
+                <button type="submit" class="search-btn-full">
+                    <i class="fas fa-search"></i>
+                    Buscar recomendações
+                </button>
+                <button type="button" class="clear-btn" onclick="clearFilters()">
+                    <i class="fas fa-times-circle"></i>
+                    Limpar tudo
+                </button>
+            </div>
         </form>
     </div>
 
     <!-- Seção de Resultados -->
-    <?php if ($searched): ?>
+    <?php if ($searched && empty($validation_error)): ?>
         
         <?php if (count($paged_results) > 0): ?>
             
@@ -1132,37 +1210,30 @@ include __DIR__ . '/vision/includes/sidebar.php';
             <!-- Grid de Vídeos -->
             <div class="video-grid video-grid-four">
                 <?php foreach ($paged_results as $lecture): 
-                    // Calcula a porcentagem e o nível de cor do gráfico
-                    $max_score = 50; // Pontuação máxima esperada (15+15+10+8+5)
+                    $max_score = 60;
                     $percentage = min(100, ($lecture['relevance'] / $max_score) * 100);
                     
-                    // Define o nível de cor baseado na pontuação
-                    if ($lecture['relevance'] < 20) {
+                    if ($lecture['relevance'] < 15) {
                         $color_level = 'very-low';
-                    } elseif ($lecture['relevance'] < 30) {
+                    } elseif ($lecture['relevance'] < 25) {
                         $color_level = 'low';
-                    } elseif ($lecture['relevance'] < 40) {
+                    } elseif ($lecture['relevance'] < 35) {
                         $color_level = 'medium';
-                    } elseif ($lecture['relevance'] < 50) {
+                    } elseif ($lecture['relevance'] < 45) {
                         $color_level = 'high';
                     } else {
                         $color_level = 'very-high';
                     }
                 ?>
                     <div class="video-card" onclick="location.href='/palestra.php?id=<?php echo $lecture['id']; ?>'">
-                        <!-- Gráfico de Relevância Vertical -->
-                        <div class="relevance-bar-container">
-                            <div class="relevance-bar" 
-                                 data-level="<?= $color_level ?>" 
-                                 style="height: <?= $percentage ?>%;"></div>
-                        </div>
-                        
-                        <!-- Tooltip com pontuação -->
-                        <div class="relevance-tooltip">
-                            Match: <?= $lecture['relevance'] ?> pontos
-                        </div>
                         
                         <div class="video-thumb-container">
+                            <!-- Bolinha de Relevância -->
+                            <div class="relevance-badge" data-level="<?= $color_level ?>"></div>
+                            <div class="relevance-tooltip">
+                                <?= $lecture['relevance'] ?> pontos
+                            </div>
+                            
                             <div class="video-thumb">
                                 <?php if (!empty($lecture['thumbnail_url'])): ?>
                                     <img src="<?php echo htmlspecialchars($lecture['thumbnail_url']); ?>" 
@@ -1255,24 +1326,22 @@ include __DIR__ . '/vision/includes/sidebar.php';
             <?php endif; ?>
 
         <?php else: ?>
-            <!-- Estado Vazio - Nenhum resultado -->
             <div class="empty-state fade-item">
                 <div class="empty-icon">
                     <i class="fas fa-search"></i>
                 </div>
                 <h2 class="empty-title">Nenhum resultado encontrado</h2>
                 <p class="empty-description">
-                    Não encontramos palestras que correspondam aos seus critérios. Tente ajustar os filtros ou remover a palavra-chave obrigatória.
+                    Não encontramos palestras que correspondam aos seus critérios. Tente ajustar os filtros.
                 </p>
             </div>
         <?php endif; ?>
         
-    <?php else: ?>
-        <!-- Mensagem Inicial - Antes de buscar -->
+    <?php elseif (!$searched): ?>
         <div class="initial-message fade-item">
             <i class="fas fa-magic"></i>
             <h2>Pronto para descobrir conteúdo incrível?</h2>
-            <p>Use os filtros acima para receber recomendações personalizadas baseadas nos seus interesses e necessidades profissionais.</p>
+            <p>Responda às perguntas acima e selecione pelo menos 3 campos para receber recomendações personalizadas!</p>
         </div>
     <?php endif; ?>
 
@@ -1309,6 +1378,17 @@ function toggleWatchlist(checkbox, lectureId) {
         watchlistText.textContent = !isChecked ? 'Na minha lista' : 'Colocar na minha lista';
         alert('Erro de conexão: ' + error.message);
     });
+}
+
+function clearFilters() {
+    // Desmarca todos os checkboxes
+    document.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
+    
+    // Limpa o campo de texto
+    document.querySelector('input[name="interest"]').value = '';
+    
+    // Recarrega a página para estado inicial
+    window.location.href = 'vetor.php';
 }
 </script>
 
