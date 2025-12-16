@@ -73,6 +73,7 @@ if ($is_logged_in && isset($pdo)) {
 // Inputs
 $roles = $_POST['roles'] ?? [];       
 $specs = $_POST['specs'] ?? [];       
+$themes = $_POST['themes'] ?? [];     // Novo: Temas/Tecnologias
 $level = $_POST['level'] ?? '';       
 $interest = $_POST['interest'] ?? ''; 
 $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
