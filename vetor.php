@@ -498,7 +498,6 @@ include __DIR__ . '/vision/includes/head.php';
     padding-bottom: 56.25%;
     overflow: hidden;
     background: linear-gradient(135deg, var(--brand-purple), #5e3370);
-    z-index: 1;
 }
 
 .video-thumb {
