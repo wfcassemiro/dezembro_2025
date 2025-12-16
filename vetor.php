@@ -272,9 +272,6 @@ include __DIR__ . '/vision/includes/head.php';
     display: flex;
     flex-direction: column;
     gap: 10px;
-    max-height: 280px;
-    overflow-y: auto;
-    padding-right: 5px;
 }
 
 /* Duas colunas para Especialidades */
@@ -282,9 +279,6 @@ include __DIR__ . '/vision/includes/head.php';
     display: grid;
     grid-template-columns: repeat(2, 1fr);
     gap: 10px 15px;
-    max-height: 280px;
-    overflow-y: auto;
-    padding-right: 5px;
 }
 
 @media (max-width: 768px) {
