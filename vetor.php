@@ -1929,6 +1929,19 @@ function clearFilters() {
     // Recarrega a página para estado inicial
     window.location.href = 'vetor.php';
 }
+
+// Smooth scroll para navegadores antigos
+document.addEventListener('DOMContentLoaded', function() {
+    // Se a URL tem #resultados, rola suavemente após carregamento
+    if (window.location.hash === '#resultados') {
+        setTimeout(function() {
+            const element = document.getElementById('resultados');
+            if (element) {
+                element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        }, 100);
+    }
+});
 </script>
 
 <?php include __DIR__ . '/vision/includes/footer.php'; ?>
