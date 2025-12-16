@@ -418,73 +418,160 @@ include __DIR__ . '/vision/includes/head.php';
     border: 1px solid var(--accent-gold);
 }
 
-/* Trilhas com cores especiais */
+/* Cores únicas para cada trilha */
+
+/* 1. Tradução - Azul Royal */
+.trilha-traducao {
+    background: linear-gradient(135deg, rgba(41, 128, 185, 0.3), rgba(52, 152, 219, 0.3));
+    border-color: #3498db;
+}
+.trilha-traducao:hover {
+    background: linear-gradient(135deg, rgba(41, 128, 185, 0.5), rgba(52, 152, 219, 0.5));
+    border-color: #2980b9;
+}
+.trilha-traducao i {
+    color: #3498db;
+}
+
+/* 2. Iniciante - Verde */
 .trilha-destaque {
     background: linear-gradient(135deg, rgba(46, 204, 113, 0.3), rgba(39, 174, 96, 0.3));
     border-color: #2ecc71;
 }
-
 .trilha-destaque:hover {
     background: linear-gradient(135deg, rgba(46, 204, 113, 0.5), rgba(39, 174, 96, 0.5));
     border-color: #27ae60;
 }
-
 .trilha-destaque i {
     color: #2ecc71;
 }
 
-.trilha-wellness {
-    background: linear-gradient(135deg, rgba(52, 152, 219, 0.3), rgba(41, 128, 185, 0.3));
-    border-color: #3498db;
-}
-
-.trilha-wellness:hover {
-    background: linear-gradient(135deg, rgba(52, 152, 219, 0.5), rgba(41, 128, 185, 0.5));
-    border-color: #2980b9;
-}
-
-.trilha-wellness i {
-    color: #3498db;
-}
-
-.trilha-gaming {
-    background: linear-gradient(135deg, rgba(155, 89, 182, 0.3), rgba(142, 68, 173, 0.3));
+/* 3. Interpretação - Roxo */
+.trilha-interpretacao {
+    background: linear-gradient(135deg, rgba(142, 68, 173, 0.3), rgba(155, 89, 182, 0.3));
     border-color: #9b59b6;
 }
-
-.trilha-gaming:hover {
-    background: linear-gradient(135deg, rgba(155, 89, 182, 0.5), rgba(142, 68, 173, 0.5));
+.trilha-interpretacao:hover {
+    background: linear-gradient(135deg, rgba(142, 68, 173, 0.5), rgba(155, 89, 182, 0.5));
     border-color: #8e44ad;
 }
-
-.trilha-gaming i {
+.trilha-interpretacao i {
     color: #9b59b6;
 }
 
-.trilha-medical {
-    background: linear-gradient(135deg, rgba(231, 76, 60, 0.3), rgba(192, 57, 43, 0.3));
+/* 4. Ferramentas - Cinza/Prata */
+.trilha-ferramentas {
+    background: linear-gradient(135deg, rgba(127, 140, 141, 0.3), rgba(149, 165, 166, 0.3));
+    border-color: #95a5a6;
+}
+.trilha-ferramentas:hover {
+    background: linear-gradient(135deg, rgba(127, 140, 141, 0.5), rgba(149, 165, 166, 0.5));
+    border-color: #7f8c8d;
+}
+.trilha-ferramentas i {
+    color: #bdc3c7;
+}
+
+/* 5. Literária - Rosa/Magenta */
+.trilha-literaria {
+    background: linear-gradient(135deg, rgba(236, 112, 99, 0.3), rgba(231, 76, 60, 0.3));
     border-color: #e74c3c;
 }
-
-.trilha-medical:hover {
-    background: linear-gradient(135deg, rgba(231, 76, 60, 0.5), rgba(192, 57, 43, 0.5));
+.trilha-literaria:hover {
+    background: linear-gradient(135deg, rgba(236, 112, 99, 0.5), rgba(231, 76, 60, 0.5));
     border-color: #c0392b;
 }
+.trilha-literaria i {
+    color: #ec7063;
+}
 
+/* 6. Bem-estar - Turquesa/Ciano */
+.trilha-wellness {
+    background: linear-gradient(135deg, rgba(26, 188, 156, 0.3), rgba(22, 160, 133, 0.3));
+    border-color: #1abc9c;
+}
+.trilha-wellness:hover {
+    background: linear-gradient(135deg, rgba(26, 188, 156, 0.5), rgba(22, 160, 133, 0.5));
+    border-color: #16a085;
+}
+.trilha-wellness i {
+    color: #1abc9c;
+}
+
+/* 7. Legendagem - Azul Escuro */
+.trilha-legendagem {
+    background: linear-gradient(135deg, rgba(52, 73, 94, 0.3), rgba(44, 62, 80, 0.3));
+    border-color: #34495e;
+}
+.trilha-legendagem:hover {
+    background: linear-gradient(135deg, rgba(52, 73, 94, 0.5), rgba(44, 62, 80, 0.5));
+    border-color: #2c3e50;
+}
+.trilha-legendagem i {
+    color: #7f8c8d;
+}
+
+/* 8. Games - Verde Limão */
+.trilha-gaming {
+    background: linear-gradient(135deg, rgba(154, 205, 50, 0.3), rgba(124, 179, 66, 0.3));
+    border-color: #9acd32;
+}
+.trilha-gaming:hover {
+    background: linear-gradient(135deg, rgba(154, 205, 50, 0.5), rgba(124, 179, 66, 0.5));
+    border-color: #7cb342;
+}
+.trilha-gaming i {
+    color: #9acd32;
+}
+
+/* 9. Dublagem - Laranja */
+.trilha-dublagem {
+    background: linear-gradient(135deg, rgba(230, 126, 34, 0.3), rgba(211, 84, 0, 0.3));
+    border-color: #e67e22;
+}
+.trilha-dublagem:hover {
+    background: linear-gradient(135deg, rgba(230, 126, 34, 0.5), rgba(211, 84, 0, 0.5));
+    border-color: #d35400;
+}
+.trilha-dublagem i {
+    color: #e67e22;
+}
+
+/* 10. Técnica - Azul Petróleo */
+.trilha-tecnica {
+    background: linear-gradient(135deg, rgba(23, 165, 137, 0.3), rgba(17, 122, 101, 0.3));
+    border-color: #17a589;
+}
+.trilha-tecnica:hover {
+    background: linear-gradient(135deg, rgba(23, 165, 137, 0.5), rgba(17, 122, 101, 0.5));
+    border-color: #117a65;
+}
+.trilha-tecnica i {
+    color: #17a589;
+}
+
+/* 11. Médica/Saúde - Vermelho */
+.trilha-medical {
+    background: linear-gradient(135deg, rgba(192, 57, 43, 0.3), rgba(231, 76, 60, 0.3));
+    border-color: #c0392b;
+}
+.trilha-medical:hover {
+    background: linear-gradient(135deg, rgba(192, 57, 43, 0.5), rgba(231, 76, 60, 0.5));
+    border-color: #e74c3c;
+}
 .trilha-medical i {
     color: #e74c3c;
 }
 
+/* 12. Jurídica - Dourado/Amarelo */
 .trilha-legal {
-    background: linear-gradient(135deg, rgba(243, 156, 18, 0.3), rgba(211, 84, 0, 0.3));
+    background: linear-gradient(135deg, rgba(243, 156, 18, 0.3), rgba(241, 196, 15, 0.3));
     border-color: #f39c12;
 }
-
 .trilha-legal:hover {
-    background: linear-gradient(135deg, rgba(243, 156, 18, 0.5), rgba(211, 84, 0, 0.5));
-    border-color: #e67e22;
+    background: linear-gradient(135deg, rgba(243, 156, 18, 0.5), rgba(241, 196, 15, 0.5));
+    border-color: #f1c40f;
 }
-
 .trilha-legal i {
     color: #f39c12;
 }
