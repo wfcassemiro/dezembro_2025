@@ -1306,7 +1306,7 @@ include __DIR__ . '/vision/includes/sidebar.php';
         <p class="trilhas-subtitle">Explore coleções curadas de palestras por tema</p>
         
         <div class="trilhas-grid">
-            <a href="vetor.php?trilha=traducao" class="trilha-btn" data-trilha="traducao">
+            <a href="vetor.php?trilha=traducao" class="trilha-btn <?= $trilha === 'traducao' ? 'trilha-active' : '' ?>" data-trilha="traducao">
                 <i class="fas fa-language"></i>
                 <span class="trilha-name">Tradução</span>
                 <span class="trilha-count"><?= $trilhas['trilha_traducao'] ?></span>
