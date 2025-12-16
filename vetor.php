@@ -1007,8 +1007,131 @@ include __DIR__ . '/vision/includes/sidebar.php';
         <p>Encontre o conteúdo ideal com nossa IA de recomendação aprimorada</p>
     </div>
 
+    <!-- Trilhas Especiais -->
+    <?php
+    // Buscar contagem de palestras por trilha
+    $trilhas = [];
+    try {
+        $stmt = $pdo->query("SELECT 
+            SUM(is_translation) as trilha_traducao,
+            SUM(is_interpretation) as trilha_interpretacao,
+            SUM(is_beginner) as trilha_iniciante,
+            SUM(is_tools) as trilha_ferramentas,
+            SUM(is_literary) as trilha_literaria,
+            SUM(is_wellness) as trilha_bemestar,
+            SUM(is_subtitling) as trilha_legendagem,
+            SUM(is_gaming) as trilha_games,
+            SUM(is_dubbing) as trilha_dublagem,
+            SUM(is_technical) as trilha_tecnica,
+            SUM(is_medical) as trilha_medica,
+            SUM(is_revision) as trilha_revisao,
+            SUM(is_legal) as trilha_juridica
+        FROM lectures");
+        $trilhas = $stmt->fetch();
+    } catch (Exception $e) {
+        // Fallback se der erro
+        $trilhas = [
+            'trilha_traducao' => 277,
+            'trilha_interpretacao' => 129,
+            'trilha_iniciante' => 250,
+            'trilha_ferramentas' => 86,
+            'trilha_literaria' => 52,
+            'trilha_bemestar' => 48,
+            'trilha_legendagem' => 36,
+            'trilha_games' => 28,
+            'trilha_dublagem' => 21,
+            'trilha_tecnica' => 16,
+            'trilha_medica' => 14,
+            'trilha_revisao' => 14,
+            'trilha_juridica' => 10,
+        ];
+    }
+    ?>
+    
+    <div class="trilhas-container fade-item">
+        <h3 class="trilhas-title">
+            <i class="fas fa-route"></i>
+            Trilhas Especiais
+        </h3>
+        <p class="trilhas-subtitle">Explore coleções curadas de palestras por tema</p>
+        
+        <div class="trilhas-grid">
+            <a href="vetor.php?trilha=traducao" class="trilha-btn" data-trilha="traducao">
+                <i class="fas fa-language"></i>
+                <span class="trilha-name">Tradução</span>
+                <span class="trilha-count"><?= $trilhas['trilha_traducao'] ?></span>
+            </a>
+            
+            <a href="vetor.php?trilha=iniciante" class="trilha-btn trilha-destaque" data-trilha="iniciante">
+                <i class="fas fa-seedling"></i>
+                <span class="trilha-name">Iniciante</span>
+                <span class="trilha-count"><?= $trilhas['trilha_iniciante'] ?></span>
+            </a>
+            
+            <a href="vetor.php?trilha=interpretacao" class="trilha-btn" data-trilha="interpretacao">
+                <i class="fas fa-microphone"></i>
+                <span class="trilha-name">Interpretação</span>
+                <span class="trilha-count"><?= $trilhas['trilha_interpretacao'] ?></span>
+            </a>
+            
+            <a href="vetor.php?trilha=ferramentas" class="trilha-btn" data-trilha="ferramentas">
+                <i class="fas fa-tools"></i>
+                <span class="trilha-name">Ferramentas</span>
+                <span class="trilha-count"><?= $trilhas['trilha_ferramentas'] ?></span>
+            </a>
+            
+            <a href="vetor.php?trilha=literaria" class="trilha-btn" data-trilha="literaria">
+                <i class="fas fa-book"></i>
+                <span class="trilha-name">Literária</span>
+                <span class="trilha-count"><?= $trilhas['trilha_literaria'] ?></span>
+            </a>
+            
+            <a href="vetor.php?trilha=bemestar" class="trilha-btn trilha-wellness" data-trilha="bemestar">
+                <i class="fas fa-spa"></i>
+                <span class="trilha-name">Bem-estar</span>
+                <span class="trilha-count"><?= $trilhas['trilha_bemestar'] ?></span>
+            </a>
+            
+            <a href="vetor.php?trilha=legendagem" class="trilha-btn" data-trilha="legendagem">
+                <i class="fas fa-closed-captioning"></i>
+                <span class="trilha-name">Legendagem</span>
+                <span class="trilha-count"><?= $trilhas['trilha_legendagem'] ?></span>
+            </a>
+            
+            <a href="vetor.php?trilha=games" class="trilha-btn trilha-gaming" data-trilha="games">
+                <i class="fas fa-gamepad"></i>
+                <span class="trilha-name">Games</span>
+                <span class="trilha-count"><?= $trilhas['trilha_games'] ?></span>
+            </a>
+            
+            <a href="vetor.php?trilha=dublagem" class="trilha-btn" data-trilha="dublagem">
+                <i class="fas fa-film"></i>
+                <span class="trilha-name">Dublagem</span>
+                <span class="trilha-count"><?= $trilhas['trilha_dublagem'] ?></span>
+            </a>
+            
+            <a href="vetor.php?trilha=tecnica" class="trilha-btn" data-trilha="tecnica">
+                <i class="fas fa-cogs"></i>
+                <span class="trilha-name">Técnica</span>
+                <span class="trilha-count"><?= $trilhas['trilha_tecnica'] ?></span>
+            </a>
+            
+            <a href="vetor.php?trilha=medica" class="trilha-btn trilha-medical" data-trilha="medica">
+                <i class="fas fa-heartbeat"></i>
+                <span class="trilha-name">Médica/Saúde</span>
+                <span class="trilha-count"><?= $trilhas['trilha_medica'] ?></span>
+            </a>
+            
+            <a href="vetor.php?trilha=juridica" class="trilha-btn trilha-legal" data-trilha="juridica">
+                <i class="fas fa-gavel"></i>
+                <span class="trilha-name">Jurídica</span>
+                <span class="trilha-count"><?= $trilhas['trilha_juridica'] ?></span>
+            </a>
+        </div>
+    </div>
+
     <!-- Perguntas Guiadas -->
-    <?php if (!$searched): ?>
+    <?php if (!$searched && empty($_GET['trilha'])): ?>
     <div class="guided-questions fade-item">
         <h3><i class="fas fa-lightbulb"></i> Dicas para melhores recomendações</h3>
         <div class="question-item">
