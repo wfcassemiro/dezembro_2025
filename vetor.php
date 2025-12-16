@@ -500,20 +500,70 @@ include __DIR__ . '/vision/includes/head.php';
     margin-bottom: 10px;
 }
 
-/* Badge de relevância */
-.relevance-badge {
+/* Gráfico de Relevância Vertical */
+.relevance-bar-container {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 8px;
+    background: rgba(0, 0, 0, 0.2);
+    border-top-left-radius: 16px;
+    border-bottom-left-radius: 16px;
+    overflow: hidden;
+    z-index: 10;
+}
+
+.relevance-bar {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    transition: height 0.5s ease;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
+}
+
+/* Gradiente de cor baseado na relevância */
+.relevance-bar[data-level="very-low"] {
+    background: linear-gradient(to top, #3498db, #5dade2); /* Azul frio */
+}
+
+.relevance-bar[data-level="low"] {
+    background: linear-gradient(to top, #1abc9c, #48c9b0); /* Verde-azulado */
+}
+
+.relevance-bar[data-level="medium"] {
+    background: linear-gradient(to top, #2ecc71, #58d68d); /* Verde */
+}
+
+.relevance-bar[data-level="high"] {
+    background: linear-gradient(to top, #f39c12, #f8c471); /* Amarelo-laranja */
+}
+
+.relevance-bar[data-level="very-high"] {
+    background: linear-gradient(to top, #e74c3c, #ec7063); /* Vermelho quente */
+}
+
+/* Tooltip de pontuação */
+.relevance-tooltip {
     position: absolute;
     top: 10px;
-    left: 10px;
-    background: linear-gradient(135deg, #27ae60, #229954);
+    left: 15px;
+    background: rgba(0, 0, 0, 0.85);
     color: white;
-    padding: 6px 12px;
-    border-radius: 8px;
-    font-size: 0.8rem;
+    padding: 5px 10px;
+    border-radius: 6px;
+    font-size: 0.75rem;
     font-weight: 700;
-    z-index: 5;
-    box-shadow: 0 2px 8px rgba(39, 174, 96, 0.6);
-    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.7);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+    z-index: 15;
+    white-space: nowrap;
+}
+
+.video-card:hover .relevance-tooltip {
+    opacity: 1;
 }
 
 /* Overlay de play */
