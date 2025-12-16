@@ -272,6 +272,28 @@ include __DIR__ . '/vision/includes/head.php';
     display: flex;
     flex-direction: column;
     gap: 10px;
+    max-height: 280px;
+    overflow-y: auto;
+    padding-right: 5px;
+}
+
+/* Scrollbar customizada */
+.custom-checkbox-wrapper::-webkit-scrollbar {
+    width: 6px;
+}
+
+.custom-checkbox-wrapper::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+}
+
+.custom-checkbox-wrapper::-webkit-scrollbar-thumb {
+    background: var(--brand-purple);
+    border-radius: 10px;
+}
+
+.custom-checkbox-wrapper::-webkit-scrollbar-thumb:hover {
+    background: var(--brand-purple-light);
 }
 
 .custom-checkbox {
