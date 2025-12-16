@@ -148,6 +148,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' || isset($_GET['page'])) {
             foreach ($specs as $spec) {
                 if (strpos($corpus, mb_strtolower($spec)) !== false) $score += 15;
             }
+            
+            // Pontuação baseada em Themes (Temas/Tecnologias) - Peso 8
+            foreach ($themes as $theme) {
+                if (strpos($corpus, mb_strtolower($theme)) !== false) $score += 8;
+            }
 
             // ⚠️ THRESHOLD MÍNIMO DE 20 PONTOS
             // Só inclui resultados com pontuação >= 20
