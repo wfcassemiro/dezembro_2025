@@ -545,13 +545,14 @@ include __DIR__ . '/vision/includes/head.php';
     position: absolute;
     left: 0;
     top: 0;
-    bottom: 0;
+    height: 100%;
     width: 8px;
-    background: rgba(0, 0, 0, 0.2);
+    background: rgba(0, 0, 0, 0.3);
     border-top-left-radius: 16px;
     border-bottom-left-radius: 16px;
     overflow: hidden;
-    z-index: 20;
+    z-index: 30;
+    pointer-events: none;
 }
 
 .relevance-bar {
