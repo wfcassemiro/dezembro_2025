@@ -1736,8 +1736,11 @@ include __DIR__ . '/vision/includes/sidebar.php';
             <?php if ($total_pages > 1): ?>
             <div class="pagination-wrapper">
                 <div class="pagination">
-                    <?php for($i=1; $i <= $total_pages; $i++): ?>
-                        <a href="?page=<?= $i ?>" class="page-link <?= ($i == $page) ? 'active' : '' ?>">
+                    <?php for($i=1; $i <= $total_pages; $i++): 
+                        // Manter trilha na URL se existir
+                        $page_url = !empty($trilha) ? "?trilha=$trilha&page=$i" : "?page=$i";
+                    ?>
+                        <a href="<?= $page_url ?>#resultados" class="page-link <?= ($i == $page) ? 'active' : '' ?>">
                             <?= $i ?>
                         </a>
                     <?php endfor; ?>
