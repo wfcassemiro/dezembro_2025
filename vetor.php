@@ -1556,8 +1556,34 @@ include __DIR__ . '/vision/includes/sidebar.php';
             <!-- Header de Resultados -->
             <div class="results-header fade-item">
                 <div class="results-count">
-                    Encontramos <span><?php echo $total_results; ?></span> <?php echo $total_results == 1 ? 'resultado' : 'resultados'; ?>
+                    <?php if (!empty($trilha)): ?>
+                        <i class="fas fa-route" style="color: var(--accent-gold); margin-right: 10px;"></i>
+                        Trilha: <strong style="color: var(--accent-gold);"><?php 
+                            $trilha_names = [
+                                'traducao' => 'Tradução',
+                                'interpretacao' => 'Interpretação',
+                                'iniciante' => 'Iniciante',
+                                'ferramentas' => 'Ferramentas',
+                                'literaria' => 'Literária',
+                                'bemestar' => 'Bem-estar',
+                                'legendagem' => 'Legendagem',
+                                'games' => 'Games',
+                                'dublagem' => 'Dublagem',
+                                'tecnica' => 'Técnica',
+                                'medica' => 'Médica/Saúde',
+                                'revisao' => 'Revisão',
+                                'juridica' => 'Jurídica',
+                            ];
+                            echo $trilha_names[$trilha] ?? ucfirst($trilha);
+                        ?></strong> - 
+                    <?php endif; ?>
+                    <span><?php echo $total_results; ?></span> <?php echo $total_results == 1 ? 'palestra' : 'palestras'; ?>
                 </div>
+                <?php if (!empty($trilha)): ?>
+                    <a href="vetor.php" class="clear-trilha-btn">
+                        <i class="fas fa-times"></i> Voltar
+                    </a>
+                <?php endif; ?>
             </div>
 
             <!-- Grid de Vídeos -->
