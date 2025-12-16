@@ -599,7 +599,7 @@ include __DIR__ . '/vision/includes/head.php';
     opacity: 0;
     transition: opacity 0.3s ease;
     pointer-events: none;
-    z-index: 25;
+    z-index: 35;
     white-space: nowrap;
 }
 
