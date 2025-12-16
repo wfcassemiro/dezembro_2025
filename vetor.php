@@ -1318,61 +1318,61 @@ include __DIR__ . '/vision/includes/sidebar.php';
                 <span class="trilha-count"><?= $trilhas['trilha_iniciante'] ?></span>
             </a>
             
-            <a href="vetor.php?trilha=interpretacao" class="trilha-btn" data-trilha="interpretacao">
+            <a href="vetor.php?trilha=interpretacao" class="trilha-btn <?= $trilha === 'interpretacao' ? 'trilha-active' : '' ?>" data-trilha="interpretacao">
                 <i class="fas fa-microphone"></i>
                 <span class="trilha-name">Interpretação</span>
                 <span class="trilha-count"><?= $trilhas['trilha_interpretacao'] ?></span>
             </a>
             
-            <a href="vetor.php?trilha=ferramentas" class="trilha-btn" data-trilha="ferramentas">
+            <a href="vetor.php?trilha=ferramentas" class="trilha-btn <?= $trilha === 'ferramentas' ? 'trilha-active' : '' ?>" data-trilha="ferramentas">
                 <i class="fas fa-tools"></i>
                 <span class="trilha-name">Ferramentas</span>
                 <span class="trilha-count"><?= $trilhas['trilha_ferramentas'] ?></span>
             </a>
             
-            <a href="vetor.php?trilha=literaria" class="trilha-btn" data-trilha="literaria">
+            <a href="vetor.php?trilha=literaria" class="trilha-btn <?= $trilha === 'literaria' ? 'trilha-active' : '' ?>" data-trilha="literaria">
                 <i class="fas fa-book"></i>
                 <span class="trilha-name">Literária</span>
                 <span class="trilha-count"><?= $trilhas['trilha_literaria'] ?></span>
             </a>
             
-            <a href="vetor.php?trilha=bemestar" class="trilha-btn trilha-wellness" data-trilha="bemestar">
+            <a href="vetor.php?trilha=bemestar" class="trilha-btn trilha-wellness <?= $trilha === 'bemestar' ? 'trilha-active' : '' ?>" data-trilha="bemestar">
                 <i class="fas fa-spa"></i>
                 <span class="trilha-name">Bem-estar</span>
                 <span class="trilha-count"><?= $trilhas['trilha_bemestar'] ?></span>
             </a>
             
-            <a href="vetor.php?trilha=legendagem" class="trilha-btn" data-trilha="legendagem">
+            <a href="vetor.php?trilha=legendagem" class="trilha-btn <?= $trilha === 'legendagem' ? 'trilha-active' : '' ?>" data-trilha="legendagem">
                 <i class="fas fa-closed-captioning"></i>
                 <span class="trilha-name">Legendagem</span>
                 <span class="trilha-count"><?= $trilhas['trilha_legendagem'] ?></span>
             </a>
             
-            <a href="vetor.php?trilha=games" class="trilha-btn trilha-gaming" data-trilha="games">
+            <a href="vetor.php?trilha=games" class="trilha-btn trilha-gaming <?= $trilha === 'games' ? 'trilha-active' : '' ?>" data-trilha="games">
                 <i class="fas fa-gamepad"></i>
                 <span class="trilha-name">Games</span>
                 <span class="trilha-count"><?= $trilhas['trilha_games'] ?></span>
             </a>
             
-            <a href="vetor.php?trilha=dublagem" class="trilha-btn" data-trilha="dublagem">
+            <a href="vetor.php?trilha=dublagem" class="trilha-btn <?= $trilha === 'dublagem' ? 'trilha-active' : '' ?>" data-trilha="dublagem">
                 <i class="fas fa-film"></i>
                 <span class="trilha-name">Dublagem</span>
                 <span class="trilha-count"><?= $trilhas['trilha_dublagem'] ?></span>
             </a>
             
-            <a href="vetor.php?trilha=tecnica" class="trilha-btn" data-trilha="tecnica">
+            <a href="vetor.php?trilha=tecnica" class="trilha-btn <?= $trilha === 'tecnica' ? 'trilha-active' : '' ?>" data-trilha="tecnica">
                 <i class="fas fa-cogs"></i>
                 <span class="trilha-name">Técnica</span>
                 <span class="trilha-count"><?= $trilhas['trilha_tecnica'] ?></span>
             </a>
             
-            <a href="vetor.php?trilha=medica" class="trilha-btn trilha-medical" data-trilha="medica">
+            <a href="vetor.php?trilha=medica" class="trilha-btn trilha-medical <?= $trilha === 'medica' ? 'trilha-active' : '' ?>" data-trilha="medica">
                 <i class="fas fa-heartbeat"></i>
                 <span class="trilha-name">Médica/Saúde</span>
                 <span class="trilha-count"><?= $trilhas['trilha_medica'] ?></span>
             </a>
             
-            <a href="vetor.php?trilha=juridica" class="trilha-btn trilha-legal" data-trilha="juridica">
+            <a href="vetor.php?trilha=juridica" class="trilha-btn trilha-legal <?= $trilha === 'juridica' ? 'trilha-active' : '' ?>" data-trilha="juridica">
                 <i class="fas fa-gavel"></i>
                 <span class="trilha-name">Jurídica</span>
                 <span class="trilha-count"><?= $trilhas['trilha_juridica'] ?></span>
