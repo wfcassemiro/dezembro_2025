@@ -1312,7 +1312,7 @@ include __DIR__ . '/vision/includes/sidebar.php';
                 <span class="trilha-count"><?= $trilhas['trilha_traducao'] ?></span>
             </a>
             
-            <a href="vetor.php?trilha=iniciante" class="trilha-btn trilha-destaque" data-trilha="iniciante">
+            <a href="vetor.php?trilha=iniciante" class="trilha-btn trilha-destaque <?= $trilha === 'iniciante' ? 'trilha-active' : '' ?>" data-trilha="iniciante">
                 <i class="fas fa-seedling"></i>
                 <span class="trilha-name">Iniciante</span>
                 <span class="trilha-count"><?= $trilhas['trilha_iniciante'] ?></span>
