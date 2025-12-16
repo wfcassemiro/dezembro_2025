@@ -122,6 +122,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' || isset($_GET['page'])) {
 
         // ==========================================
         // ALGORITMO DE PONTUAÇÃO AJUSTADO
+        // Sistema de Pontos:
+        // - Área de Atuação (Roles): 10 pontos cada
+        // - Especialidade (Specs): 15 pontos cada
+        // - Temas/Tecnologias (Themes): 8 pontos cada
+        // - Palavra-chave (Interest): 5 pontos (obrigatória se preenchida)
+        // - Threshold mínimo: 20 pontos
         // ==========================================
         foreach ($candidates as $row) {
             $score = 0;
