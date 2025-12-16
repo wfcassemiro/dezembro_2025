@@ -1549,7 +1549,7 @@ include __DIR__ . '/vision/includes/sidebar.php';
     </div>
 
     <!-- Seção de Resultados -->
-    <?php if ($searched && empty($validation_error)): ?>
+    <?php if ($searched && (empty($validation_error) || !empty($trilha))): ?>
         
         <?php if (count($paged_results) > 0): ?>
             
