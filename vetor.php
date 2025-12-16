@@ -75,6 +75,7 @@ $roles = $_POST['roles'] ?? [];
 $specs = $_POST['specs'] ?? [];       
 $themes = $_POST['themes'] ?? [];
 $interest = $_POST['interest'] ?? ''; 
+$trilha = $_GET['trilha'] ?? '';
 $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
 if ($page < 1) $page = 1;
 $limit = 18;
@@ -87,8 +88,54 @@ $paged_results = [];
 $error_msg = '';
 $validation_error = '';
 
+// ==========================================
+// TRILHAS ESPECIAIS
+// ==========================================
+if (!empty($trilha)) {
+    $searched = true;
+    
+    // Mapeamento de trilhas para campos booleanos
+    $trilha_mapping = [
+        'traducao' => 'is_translation = 1',
+        'interpretacao' => 'is_interpretation = 1',
+        'iniciante' => 'is_beginner = 1',
+        'ferramentas' => 'is_tools = 1',
+        'literaria' => 'is_literary = 1',
+        'bemestar' => 'is_wellness = 1',
+        'legendagem' => 'is_subtitling = 1',
+        'games' => 'is_gaming = 1',
+        'dublagem' => 'is_dubbing = 1',
+        'tecnica' => 'is_technical = 1',
+        'medica' => 'is_medical = 1',
+        'revisao' => 'is_revision = 1',
+        'juridica' => 'is_legal = 1',
+    ];
+    
+    if (isset($trilha_mapping[$trilha])) {
+        try {
+            $sql = "SELECT * FROM lectures WHERE " . $trilha_mapping[$trilha] . " ORDER BY created_at DESC";
+            $stmt = $pdo->query($sql);
+            $results = $stmt->fetchAll();
+            
+            // Adicionar relevance para manter compatibilidade
+            foreach ($results as &$result) {
+                $result['relevance'] = 50; // Relevância alta para trilhas
+            }
+            
+            // Paginação
+            $total_results = count($results);
+            $total_pages = ceil($total_results / $limit);
+            $offset = ($page - 1) * $limit;
+            $paged_results = array_slice($results, $offset, $limit);
+            
+        } catch (Exception $e) {
+            $error_msg = "Erro ao buscar palestras da trilha.";
+        }
+    }
+}
+
 // Mantém filtros na sessão para paginação
-if ($_SERVER['REQUEST_METHOD'] === 'POST' || isset($_GET['page'])) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' || (isset($_GET['page']) && empty($trilha))) {
     $searched = true;
     
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
