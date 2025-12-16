@@ -760,6 +760,26 @@ include __DIR__ . '/vision/includes/head.php';
     color: var(--accent-gold);
 }
 
+.clear-trilha-btn {
+    background: linear-gradient(135deg, #e74c3c, #c0392b);
+    color: #ffffff;
+    padding: 10px 20px;
+    border-radius: 8px;
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 0.95rem;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.clear-trilha-btn:hover {
+    background: linear-gradient(135deg, #c0392b, #e74c3c);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(231, 76, 60, 0.6);
+}
+
 .video-grid-four {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
