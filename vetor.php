@@ -1605,6 +1605,9 @@ include __DIR__ . '/vision/includes/sidebar.php';
         
         <?php if (count($paged_results) > 0): ?>
             
+            <!-- Âncora para scroll -->
+            <div id="resultados"></div>
+            
             <!-- Header de Resultados -->
             <div class="results-header fade-item">
                 <div class="results-count">
