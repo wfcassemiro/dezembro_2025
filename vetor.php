@@ -101,7 +101,7 @@ if (!empty($trilha)) {
         'iniciante' => 'is_beginner = 1',
         'ferramentas' => 'is_tools = 1',
         'literaria' => 'is_literary = 1',
-        'bemestar' => 'is_wellness = 1',
+        'bemestar' => "(is_wellness = 1 OR LOWER(title) LIKE '%bem-estar%' OR LOWER(title) LIKE '%wellness%' OR LOWER(description) LIKE '%bem-estar%' OR LOWER(description) LIKE '%wellness%' OR LOWER(title) LIKE '%saude%' OR LOWER(title) LIKE '%saúde%' OR LOWER(title) LIKE '%mental%' OR LOWER(title) LIKE '%autocuidado%')",
         'legendagem' => 'is_subtitling = 1',
         'games' => 'is_gaming = 1',
         'dublagem' => 'is_dubbing = 1',
