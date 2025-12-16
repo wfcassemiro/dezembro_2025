@@ -277,6 +277,22 @@ include __DIR__ . '/vision/includes/head.php';
     padding-right: 5px;
 }
 
+/* Duas colunas para Especialidades */
+.custom-checkbox-wrapper.two-columns {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px 15px;
+    max-height: 280px;
+    overflow-y: auto;
+    padding-right: 5px;
+}
+
+@media (max-width: 768px) {
+    .custom-checkbox-wrapper.two-columns {
+        grid-template-columns: 1fr;
+    }
+}
+
 /* Scrollbar customizada */
 .custom-checkbox-wrapper::-webkit-scrollbar {
     width: 6px;
@@ -473,6 +489,7 @@ include __DIR__ . '/vision/includes/head.php';
     display: flex;
     flex-direction: column;
     height: 100%;
+    position: relative;
 }
 
 .video-card:hover {
@@ -487,6 +504,7 @@ include __DIR__ . '/vision/includes/head.php';
     padding-bottom: 56.25%;
     overflow: hidden;
     background: linear-gradient(135deg, var(--brand-purple), #5e3370);
+    z-index: 1;
 }
 
 .video-thumb {
@@ -539,7 +557,7 @@ include __DIR__ . '/vision/includes/head.php';
     border-top-left-radius: 16px;
     border-bottom-left-radius: 16px;
     overflow: hidden;
-    z-index: 10;
+    z-index: 20;
 }
 
 .relevance-bar {
@@ -553,23 +571,23 @@ include __DIR__ . '/vision/includes/head.php';
 
 /* Gradiente de cor baseado na relevância */
 .relevance-bar[data-level="very-low"] {
-    background: linear-gradient(to top, #3498db, #5dade2); /* Azul frio */
+    background: linear-gradient(to top, #3498db, #5dade2);
 }
 
 .relevance-bar[data-level="low"] {
-    background: linear-gradient(to top, #1abc9c, #48c9b0); /* Verde-azulado */
+    background: linear-gradient(to top, #1abc9c, #48c9b0);
 }
 
 .relevance-bar[data-level="medium"] {
-    background: linear-gradient(to top, #2ecc71, #58d68d); /* Verde */
+    background: linear-gradient(to top, #2ecc71, #58d68d);
 }
 
 .relevance-bar[data-level="high"] {
-    background: linear-gradient(to top, #f39c12, #f8c471); /* Amarelo-laranja */
+    background: linear-gradient(to top, #f39c12, #f8c471);
 }
 
 .relevance-bar[data-level="very-high"] {
-    background: linear-gradient(to top, #e74c3c, #ec7063); /* Vermelho quente */
+    background: linear-gradient(to top, #e74c3c, #ec7063);
 }
 
 /* Tooltip de pontuação */
@@ -586,7 +604,7 @@ include __DIR__ . '/vision/includes/head.php';
     opacity: 0;
     transition: opacity 0.3s ease;
     pointer-events: none;
-    z-index: 15;
+    z-index: 25;
     white-space: nowrap;
 }
 
@@ -977,7 +995,7 @@ include __DIR__ . '/vision/includes/sidebar.php';
                         <i class="fas fa-star"></i>
                         Especialidade
                     </span>
-                    <div class="custom-checkbox-wrapper">
+                    <div class="custom-checkbox-wrapper two-columns">
                         <label class="custom-checkbox">
                             <input type="checkbox" name="specs[]" value="Jurídica" <?= in_array('Jurídica', $specs) ? 'checked' : '' ?>>
                             <span class="checkbox-mark"></span>
