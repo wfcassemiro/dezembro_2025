@@ -95,12 +95,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' || isset($_GET['page'])) {
         $_SESSION['vetor_filters'] = [
             'roles' => $roles,
             'specs' => $specs,
+            'themes' => $themes,
             'level' => $level,
             'interest' => $interest
         ];
     } elseif (isset($_SESSION['vetor_filters'])) {
         $roles = $_SESSION['vetor_filters']['roles'];
         $specs = $_SESSION['vetor_filters']['specs'];
+        $themes = $_SESSION['vetor_filters']['themes'] ?? [];
         $level = $_SESSION['vetor_filters']['level'];
         $interest = $_SESSION['vetor_filters']['interest'];
     }
