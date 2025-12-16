@@ -300,6 +300,189 @@ include __DIR__ . '/vision/includes/head.php';
     margin: 0;
 }
 
+/* Trilhas Especiais */
+.trilhas-container {
+    background: var(--glass-bg);
+    backdrop-filter: blur(20px);
+    border: 1px solid var(--glass-border);
+    border-radius: 16px;
+    padding: 30px;
+    margin-bottom: 30px;
+}
+
+.trilhas-title {
+    color: #ffffff;
+    font-size: 1.8rem;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.trilhas-title i {
+    color: var(--accent-gold);
+}
+
+.trilhas-subtitle {
+    color: var(--text-secondary);
+    font-size: 1rem;
+    margin-bottom: 25px;
+}
+
+.trilhas-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 15px;
+}
+
+@media (max-width: 768px) {
+    .trilhas-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 480px) {
+    .trilhas-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.trilha-btn {
+    background: linear-gradient(135deg, rgba(142, 68, 173, 0.3), rgba(94, 51, 112, 0.3));
+    border: 2px solid var(--brand-purple);
+    border-radius: 12px;
+    padding: 18px 15px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    text-decoration: none;
+    transition: all 0.3s ease;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+}
+
+.trilha-btn:before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+    transition: left 0.5s ease;
+}
+
+.trilha-btn:hover:before {
+    left: 100%;
+}
+
+.trilha-btn:hover {
+    background: linear-gradient(135deg, rgba(142, 68, 173, 0.5), rgba(94, 51, 112, 0.5));
+    border-color: var(--accent-gold);
+    transform: translateY(-3px);
+    box-shadow: 0 8px 20px rgba(142, 68, 173, 0.6);
+}
+
+.trilha-btn i {
+    font-size: 2rem;
+    color: var(--accent-gold);
+    transition: transform 0.3s ease;
+}
+
+.trilha-btn:hover i {
+    transform: scale(1.15);
+}
+
+.trilha-name {
+    color: #ffffff;
+    font-size: 0.95rem;
+    font-weight: 700;
+    text-align: center;
+}
+
+.trilha-count {
+    background: rgba(247, 147, 30, 0.2);
+    color: var(--accent-gold);
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    border: 1px solid var(--accent-gold);
+}
+
+/* Trilhas com cores especiais */
+.trilha-destaque {
+    background: linear-gradient(135deg, rgba(46, 204, 113, 0.3), rgba(39, 174, 96, 0.3));
+    border-color: #2ecc71;
+}
+
+.trilha-destaque:hover {
+    background: linear-gradient(135deg, rgba(46, 204, 113, 0.5), rgba(39, 174, 96, 0.5));
+    border-color: #27ae60;
+}
+
+.trilha-destaque i {
+    color: #2ecc71;
+}
+
+.trilha-wellness {
+    background: linear-gradient(135deg, rgba(52, 152, 219, 0.3), rgba(41, 128, 185, 0.3));
+    border-color: #3498db;
+}
+
+.trilha-wellness:hover {
+    background: linear-gradient(135deg, rgba(52, 152, 219, 0.5), rgba(41, 128, 185, 0.5));
+    border-color: #2980b9;
+}
+
+.trilha-wellness i {
+    color: #3498db;
+}
+
+.trilha-gaming {
+    background: linear-gradient(135deg, rgba(155, 89, 182, 0.3), rgba(142, 68, 173, 0.3));
+    border-color: #9b59b6;
+}
+
+.trilha-gaming:hover {
+    background: linear-gradient(135deg, rgba(155, 89, 182, 0.5), rgba(142, 68, 173, 0.5));
+    border-color: #8e44ad;
+}
+
+.trilha-gaming i {
+    color: #9b59b6;
+}
+
+.trilha-medical {
+    background: linear-gradient(135deg, rgba(231, 76, 60, 0.3), rgba(192, 57, 43, 0.3));
+    border-color: #e74c3c;
+}
+
+.trilha-medical:hover {
+    background: linear-gradient(135deg, rgba(231, 76, 60, 0.5), rgba(192, 57, 43, 0.5));
+    border-color: #c0392b;
+}
+
+.trilha-medical i {
+    color: #e74c3c;
+}
+
+.trilha-legal {
+    background: linear-gradient(135deg, rgba(243, 156, 18, 0.3), rgba(211, 84, 0, 0.3));
+    border-color: #f39c12;
+}
+
+.trilha-legal:hover {
+    background: linear-gradient(135deg, rgba(243, 156, 18, 0.5), rgba(211, 84, 0, 0.5));
+    border-color: #e67e22;
+}
+
+.trilha-legal i {
+    color: #f39c12;
+}
+
 /* Perguntas guiadas */
 .guided-questions {
     background: linear-gradient(135deg, rgba(142, 68, 173, 0.2), rgba(94, 51, 112, 0.2));
