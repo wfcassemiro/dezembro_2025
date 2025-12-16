@@ -483,6 +483,38 @@ include __DIR__ . '/vision/includes/head.php';
     color: #f39c12;
 }
 
+/* Estado ativo da trilha */
+.trilha-active {
+    background: linear-gradient(135deg, var(--accent-gold), #e68a00) !important;
+    border-color: #ffffff !important;
+    box-shadow: 0 8px 20px rgba(247, 147, 30, 0.8) !important;
+    transform: scale(1.05);
+}
+
+.trilha-active i {
+    color: #2c3e50 !important;
+    animation: pulse 2s infinite;
+}
+
+.trilha-active .trilha-name {
+    color: #2c3e50 !important;
+}
+
+.trilha-active .trilha-count {
+    background: rgba(44, 62, 80, 0.3);
+    color: #2c3e50 !important;
+    border-color: #2c3e50 !important;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.1);
+    }
+}
+
 /* Perguntas guiadas */
 .guided-questions {
     background: linear-gradient(135deg, rgba(142, 68, 173, 0.2), rgba(94, 51, 112, 0.2));
