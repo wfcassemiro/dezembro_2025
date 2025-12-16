@@ -331,8 +331,14 @@ include __DIR__ . '/vision/includes/head.php';
 
 .trilhas-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    grid-template-columns: repeat(4, 1fr);
     gap: 15px;
+}
+
+@media (max-width: 1200px) {
+    .trilhas-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
 }
 
 @media (max-width: 768px) {
