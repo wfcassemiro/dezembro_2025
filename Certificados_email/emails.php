@@ -16,6 +16,11 @@ $page_title = 'Sistema de E-mails - Admin';
 $message = '';
 $error = '';
 
+// Configurações de envio em lote
+$BATCH_SIZE = 50; // Emails por lote
+$BATCH_DELAY = 2; // Segundos entre lotes
+$EMAIL_DELAY = 150000; // Microsegundos entre emails (150ms)
+
 // Processar envio de email
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
@@ -24,15 +29,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'send_email') {
         $recipient_type = $_POST['recipient_type'] ?? 'all';
         $selected_users = $_POST['selected_users'] ?? [];
+        $custom_emails = trim($_POST['custom_emails'] ?? '');
         $subject = trim($_POST['subject'] ?? '');
         $message_body = trim($_POST['message'] ?? '');
         $access_link = trim($_POST['access_link'] ?? '');
         $lecture_id = $_POST['lecture_id'] ?? null;
+        $batch_size = intval($_POST['batch_size'] ?? $BATCH_SIZE);
         
         if (empty($subject) || empty($message_body)) {
             $error = 'Assunto e mensagem são obrigatórios.';
         } else {
             try {
+                $recipients = [];
+                
                 // Buscar destinatários baseado no tipo de seleção
                 if ($recipient_type === 'selected' && !empty($selected_users)) {
                     // Usuários selecionados individualmente
@@ -40,6 +49,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $stmt = $pdo->prepare("SELECT id, email, name FROM users WHERE id IN ($placeholders) AND is_active = 1");
                     $stmt->execute($selected_users);
                     $recipients = $stmt->fetchAll();
+                } elseif ($recipient_type === 'custom') {
+                    // Emails personalizados (digitados manualmente)
+                    // Não busca do banco
                 } elseif ($recipient_type === 'all') {
                     $stmt = $pdo->query("SELECT id, email, name FROM users WHERE is_active = 1");
                     $recipients = $stmt->fetchAll();
@@ -54,7 +66,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         )
                     ");
                     $recipients = $stmt->fetchAll();
-                } else {
+                } elseif ($recipient_type === 'non_subscribers') {
                     $stmt = $pdo->query("
                         SELECT id, email, name FROM users 
                         WHERE is_active = 1 
@@ -65,8 +77,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $recipients = $stmt->fetchAll();
                 }
                 
+                // Adicionar emails personalizados
+                if (!empty($custom_emails)) {
+                    $custom_list = preg_split('/[\s,;]+/', $custom_emails);
+                    foreach ($custom_list as $email) {
+                        $email = trim($email);
+                        if (filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                            // Verificar se já não está na lista
+                            $exists = false;
+                            foreach ($recipients as $r) {
+                                if (strtolower($r['email']) === strtolower($email)) {
+                                    $exists = true;
+                                    break;
+                                }
+                            }
+                            if (!$exists) {
+                                $recipients[] = [
+                                    'id' => null,
+                                    'email' => $email,
+                                    'name' => explode('@', $email)[0] // Usar parte antes do @ como nome
+                                ];
+                            }
+                        }
+                    }
+                }
+                
                 if (empty($recipients)) {
-                    $error = 'Nenhum destinatário encontrado para esta seleção.';
+                    $error = 'Nenhum destinatário encontrado. Verifique a seleção ou adicione emails manualmente.';
                 } else {
                     // Verificar se o email está configurado
                     if (isEmailConfigured()) {
@@ -75,47 +112,60 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $sent_count = 0;
                         $failed_count = 0;
                         $failed_emails = [];
+                        $total_recipients = count($recipients);
+                        $batch_count = 0;
                         
-                        foreach ($recipients as $recipient) {
-                            try {
-                                // Personalizar mensagem
-                                $personalized_message = str_replace('[NOME]', $recipient['name'], $message_body);
-                                if (!empty($access_link)) {
-                                    $personalized_message = str_replace('[LINK]', $access_link, $personalized_message);
-                                }
-                                
-                                // Criar HTML do email
-                                $html_content = EmailTemplates::getCustomEmailTemplate($subject, nl2br(htmlspecialchars($personalized_message)));
-                                
-                                // Enviar email
-                                $result = $emailSender->sendEmail(
-                                    $recipient['email'],
-                                    $recipient['name'],
-                                    $subject,
-                                    $html_content
-                                );
-                                
-                                if ($result) {
-                                    $sent_count++;
-                                } else {
+                        // Processar em lotes
+                        $batches = array_chunk($recipients, $batch_size);
+                        
+                        foreach ($batches as $batch_index => $batch) {
+                            // Delay entre lotes (exceto o primeiro)
+                            if ($batch_index > 0) {
+                                sleep($BATCH_DELAY);
+                            }
+                            
+                            foreach ($batch as $recipient) {
+                                try {
+                                    // Personalizar mensagem
+                                    $personalized_message = str_replace('[NOME]', $recipient['name'], $message_body);
+                                    if (!empty($access_link)) {
+                                        $personalized_message = str_replace('[LINK]', $access_link, $personalized_message);
+                                    }
+                                    
+                                    // Criar HTML do email
+                                    $html_content = EmailTemplates::getCustomEmailTemplate($subject, nl2br(htmlspecialchars($personalized_message)));
+                                    
+                                    // Enviar email
+                                    $result = $emailSender->sendEmail(
+                                        $recipient['email'],
+                                        $recipient['name'],
+                                        $subject,
+                                        $html_content
+                                    );
+                                    
+                                    if ($result) {
+                                        $sent_count++;
+                                    } else {
+                                        $failed_count++;
+                                        $failed_emails[] = $recipient['email'];
+                                    }
+                                    
+                                    usleep($EMAIL_DELAY); // Delay entre emails
+                                    
+                                } catch (Exception $e) {
                                     $failed_count++;
                                     $failed_emails[] = $recipient['email'];
+                                    error_log("[Emails] Erro ao enviar para {$recipient['email']}: " . $e->getMessage());
                                 }
-                                
-                                usleep(100000); // 100ms de pausa
-                                
-                            } catch (Exception $e) {
-                                $failed_count++;
-                                $failed_emails[] = $recipient['email'];
-                                error_log("[Emails] Erro ao enviar para {$recipient['email']}: " . $e->getMessage());
                             }
+                            $batch_count++;
                         }
                         
                         if ($sent_count > 0 && $failed_count == 0) {
-                            $message = "✅ Todos os {$sent_count} e-mail(s) foram enviados com sucesso!";
+                            $message = "✅ Todos os {$sent_count} e-mail(s) foram enviados com sucesso! ({$batch_count} lote(s) processado(s))";
                         } elseif ($sent_count > 0 && $failed_count > 0) {
-                            $message = "📧 {$sent_count} e-mail(s) enviado(s), ⚠️ {$failed_count} falha(s).";
-                            if (count($failed_emails) <= 5) {
+                            $message = "📧 {$sent_count} e-mail(s) enviado(s), ⚠️ {$failed_count} falha(s). ({$batch_count} lote(s))";
+                            if (count($failed_emails) <= 10) {
                                 $error = "Falhas: " . implode(', ', $failed_emails);
                             }
                         } else {
@@ -289,6 +339,7 @@ try {
     $stmt = $pdo->query("
         SELECT id, name, email, role, 
                COALESCE(is_subscriber, 0) as is_subscriber,
+               created_at,
                CASE 
                    WHEN role = 'admin' THEN 'Admin'
                    WHEN COALESCE(is_subscriber, 0) = 1 OR role = 'subscriber' THEN 'Assinante'
@@ -347,17 +398,6 @@ include __DIR__ . '/../vision/includes/sidebar.php';
     <?php if ($error): ?>
     <div class="error-alert">
         <i class="fas fa-exclamation-circle"></i> <?php echo $error; ?>
-    </div>
-    <?php endif; ?>
-    
-    <?php if (!empty($db_errors)): ?>
-    <div class="error-alert" style="background: rgba(245, 158, 11, 0.2); border-color: rgba(245, 158, 11, 0.5); color: #f59e0b;">
-        <i class="fas fa-database"></i> <strong>Avisos do banco de dados:</strong>
-        <ul style="margin: 10px 0 0 20px; padding: 0;">
-            <?php foreach ($db_errors as $db_error): ?>
-            <li><?php echo htmlspecialchars($db_error); ?></li>
-            <?php endforeach; ?>
-        </ul>
     </div>
     <?php endif; ?>
     
@@ -422,17 +462,6 @@ include __DIR__ . '/../vision/includes/sidebar.php';
         </div>
     </div>
     
-    <!-- Debug Info (remover em produção) -->
-    <div class="video-card glass-card" style="background: rgba(59, 130, 246, 0.1); border-color: rgba(59, 130, 246, 0.3);">
-        <h3 style="color: #3b82f6;"><i class="fas fa-bug"></i> Debug Info</h3>
-        <p style="color: rgba(255,255,255,0.8);">
-            <strong>Usuários carregados:</strong> <?php echo count($all_users); ?><br>
-            <strong>Palestras carregadas:</strong> <?php echo count($all_lectures); ?><br>
-            <strong>Próxima palestra:</strong> <?php echo $next_lecture ? htmlspecialchars($next_lecture['title']) : 'Nenhuma'; ?><br>
-            <strong>Conexão BD:</strong> <?php echo isset($pdo) ? 'OK' : 'ERRO'; ?>
-        </p>
-    </div>
-    
     <!-- Próxima Palestra -->
     <?php if ($next_lecture): ?>
     <div class="video-card glass-card">
@@ -470,8 +499,18 @@ include __DIR__ . '/../vision/includes/sidebar.php';
                     <option value="all">Todos os Usuários (<?php echo $total_users; ?>)</option>
                     <option value="subscribers">Apenas Assinantes (<?php echo $total_subscribers; ?>)</option>
                     <option value="non_subscribers">Não Assinantes (<?php echo $total_users - $total_subscribers; ?>)</option>
-                    <option value="selected">Selecionar Usuários Individualmente</option>
+                    <option value="selected">Selecionar Usuários da Lista</option>
+                    <option value="custom">Apenas Emails Personalizados</option>
                 </select>
+            </div>
+            
+            <!-- Emails Personalizados (sempre visível) -->
+            <div class="form-group">
+                <label><i class="fas fa-at"></i> Emails Adicionais / Personalizados</label>
+                <textarea name="custom_emails" id="custom_emails" class="form-control" rows="3" placeholder="Digite emails separados por vírgula, espaço ou quebra de linha.&#10;Ex: email1@dominio.com, email2@dominio.com&#10;Estes emails serão adicionados aos destinatários selecionados acima."></textarea>
+                <small style="color: rgba(255,255,255,0.6); display: block; margin-top: 5px;">
+                    <i class="fas fa-info-circle"></i> Use este campo para enviar para pessoas que não estão cadastradas no sistema
+                </small>
             </div>
             
             <!-- Seleção Individual de Usuários -->
@@ -481,9 +520,22 @@ include __DIR__ . '/../vision/includes/sidebar.php';
                     <input type="text" id="userSearch" class="form-control" placeholder="Digite o nome ou email para buscar...">
                 </div>
                 
+                <!-- Filtros Adicionais -->
+                <div class="filters-row">
+                    <div class="filter-group">
+                        <label><i class="fas fa-filter"></i> Filtrar por tipo:</label>
+                        <select id="filterUserType" class="form-control" onchange="filterUsers()">
+                            <option value="">Todos os tipos</option>
+                            <option value="admin">Admins</option>
+                            <option value="assinante">Assinantes</option>
+                            <option value="free">Free</option>
+                        </select>
+                    </div>
+                </div>
+                
                 <div class="selection-controls">
                     <button type="button" class="btn-secondary" onclick="selectAllUsers()">
-                        <i class="fas fa-check-square"></i> Selecionar Todos
+                        <i class="fas fa-check-square"></i> Selecionar Todos Visíveis
                     </button>
                     <button type="button" class="btn-secondary" onclick="deselectAllUsers()">
                         <i class="fas fa-square"></i> Desmarcar Todos
@@ -501,7 +553,10 @@ include __DIR__ . '/../vision/includes/sidebar.php';
                     </div>
                     <?php else: ?>
                     <?php foreach ($all_users as $user): ?>
-                    <div class="user-item" data-name="<?php echo strtolower(htmlspecialchars($user['name'])); ?>" data-email="<?php echo strtolower(htmlspecialchars($user['email'])); ?>">
+                    <div class="user-item" 
+                         data-name="<?php echo strtolower(htmlspecialchars($user['name'])); ?>" 
+                         data-email="<?php echo strtolower(htmlspecialchars($user['email'])); ?>"
+                         data-type="<?php echo strtolower($user['user_type']); ?>">
                         <label class="user-checkbox-label">
                             <input type="checkbox" name="selected_users[]" value="<?php echo $user['id']; ?>" class="user-checkbox" onchange="updateSelectedCount()">
                             <div class="user-info">
@@ -514,6 +569,19 @@ include __DIR__ . '/../vision/includes/sidebar.php';
                     <?php endforeach; ?>
                     <?php endif; ?>
                 </div>
+            </div>
+            
+            <!-- Configurações de Envio em Lote -->
+            <div class="form-group">
+                <label><i class="fas fa-layer-group"></i> Tamanho do Lote</label>
+                <select name="batch_size" id="batch_size" class="form-control">
+                    <option value="25">25 emails por lote (mais seguro)</option>
+                    <option value="50" selected>50 emails por lote (recomendado)</option>
+                    <option value="100">100 emails por lote (mais rápido)</option>
+                </select>
+                <small style="color: rgba(255,255,255,0.6); display: block; margin-top: 5px;">
+                    <i class="fas fa-info-circle"></i> Para mais de 100 destinatários, os emails são enviados em lotes com intervalo de 2 segundos entre eles
+                </small>
             </div>
             
             <!-- Palestra Relacionada (Palestras Agendadas) -->
@@ -876,36 +944,58 @@ function updateSelectedCount() {
     document.getElementById('selectedCount').textContent = count;
 }
 
-// Busca de usuários
-document.getElementById('userSearch')?.addEventListener('input', function() {
-    const searchTerm = this.value.toLowerCase().trim();
+// Filtrar usuários por tipo
+function filterUsers() {
+    const searchTerm = (document.getElementById('userSearch')?.value || '').toLowerCase().trim();
+    const typeFilter = (document.getElementById('filterUserType')?.value || '').toLowerCase();
+    
     const items = document.querySelectorAll('.user-item');
     
     items.forEach(item => {
         const name = item.dataset.name || '';
         const email = item.dataset.email || '';
+        const userType = item.dataset.type || '';
         
-        if (searchTerm === '' || name.includes(searchTerm) || email.includes(searchTerm)) {
+        const matchesSearch = searchTerm === '' || name.includes(searchTerm) || email.includes(searchTerm);
+        const matchesType = typeFilter === '' || userType === typeFilter;
+        
+        if (matchesSearch && matchesType) {
             item.style.display = 'block';
         } else {
             item.style.display = 'none';
         }
     });
-});
+}
+
+// Busca de usuários
+document.getElementById('userSearch')?.addEventListener('input', filterUsers);
 
 // Validação do formulário
 document.getElementById('emailForm')?.addEventListener('submit', function(e) {
     const recipientType = document.getElementById('recipient_type').value;
+    const customEmails = document.getElementById('custom_emails').value.trim();
     
     if (recipientType === 'selected') {
         const selectedCount = document.querySelectorAll('.user-checkbox:checked').length;
-        if (selectedCount === 0) {
+        if (selectedCount === 0 && !customEmails) {
             e.preventDefault();
-            alert('Por favor, selecione pelo menos um usuário para enviar o email.');
+            alert('Por favor, selecione pelo menos um usuário ou adicione emails personalizados.');
             return false;
         }
         
-        if (!confirm(`Enviar email para ${selectedCount} usuário(s) selecionado(s)?`)) {
+        const totalCount = selectedCount + (customEmails ? customEmails.split(/[\s,;]+/).filter(e => e.includes('@')).length : 0);
+        if (!confirm(`Enviar email para ${totalCount} destinatário(s)?`)) {
+            e.preventDefault();
+            return false;
+        }
+    } else if (recipientType === 'custom') {
+        if (!customEmails) {
+            e.preventDefault();
+            alert('Por favor, adicione pelo menos um email no campo de emails personalizados.');
+            return false;
+        }
+        const emailCount = customEmails.split(/[\s,;]+/).filter(e => e.includes('@')).length;
+        if (!confirm(`Enviar email para ${emailCount} email(s) personalizado(s)?`)) {
             e.preventDefault();
             return false;
         }
@@ -1030,6 +1120,31 @@ textarea.form-control {
     resize: vertical;
     min-height: 200px;
     font-family: inherit;
+}
+
+/* Filtros */
+.filters-row {
+    display: flex;
+    gap: 20px;
+    margin-bottom: 15px;
+    flex-wrap: wrap;
+}
+
+.filter-group {
+    flex: 1;
+    min-width: 200px;
+}
+
+.filter-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-size: 0.9rem;
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.filter-group .form-control {
+    padding: 8px 12px;
+    font-size: 0.9rem;
 }
 
 /* Seleção de Usuários */
@@ -1278,6 +1393,10 @@ textarea.form-control {
     .selected-count {
         margin-left: 0;
         text-align: center;
+    }
+    
+    .filters-row {
+        flex-direction: column;
     }
 }
 
