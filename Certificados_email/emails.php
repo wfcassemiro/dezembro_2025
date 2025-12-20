@@ -761,6 +761,48 @@ const nextLecture = {
 const nextLecture = null;
 <?php endif; ?>
 
+// Função para preencher template ao selecionar palestra
+function fillLectureTemplate() {
+    const select = document.getElementById('lecture_id');
+    const selectedOption = select.options[select.selectedIndex];
+    
+    if (!selectedOption.value) {
+        return; // Nenhuma palestra selecionada
+    }
+    
+    const title = selectedOption.dataset.title || '';
+    const speaker = selectedOption.dataset.speaker || '';
+    const date = selectedOption.dataset.date || '';
+    const time = selectedOption.dataset.time || '';
+    const description = selectedOption.dataset.description || '';
+    
+    // Preencher assunto
+    document.getElementById('subject').value = `🎬 ${title} - Hoje às ${time}h`;
+    
+    // Preencher mensagem com o template
+    const message = `Olá!
+
+Hoje, ${date}, às ${time}h, teremos a palestra "${title}", com ${speaker}.
+
+Descrição da palestra:
+${description}
+
+A transmissão será no novo site da Translators101: translators101.com.
+
+Após fazer login, clique em "Ao vivo", no menu lateral. Entre uns 10 minutos antes, já estará rolando uma musiquinha. ;-)
+
+Se você ainda não registrou sua senha no nosso novo site, entre em contato pelo nosso WhatsApp (+55 19 98260 0771), até às 17h e ajudaremos a resolver rapidamente. Depois das 17h, não teremos como responder a tempo de liberar seu acesso.
+
+Um abraço.
+
+William Cassemiro`;
+    
+    document.getElementById('message').value = message;
+    
+    // Scroll para o formulário
+    document.getElementById('emailForm').scrollIntoView({ behavior: 'smooth' });
+}
+
 function useTemplate(type) {
     if (templates[type]) {
         document.getElementById('subject').value = templates[type].subject;
