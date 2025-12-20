@@ -79,16 +79,16 @@ Verifique se o `require` do autoload está correto em `email.php`:
 
 ## ⚙️ Configurações SMTP por Provedor
 
+### Hostinger (Configuração Atual) ✅
+```php
+define('SMTP_HOST', 'smtp.hostinger.com.br');
+define('SMTP_PORT', 465);
+define('SMTP_SECURE', 'ssl');
+```
+
 ### Hostgator
 ```php
 define('SMTP_HOST', 'br1189.hostgator.com.br');
-define('SMTP_PORT', 587);
-define('SMTP_SECURE', 'tls');
-```
-
-### Hostinger
-```php
-define('SMTP_HOST', 'smtp.hostinger.com');
 define('SMTP_PORT', 587);
 define('SMTP_SECURE', 'tls');
 ```
