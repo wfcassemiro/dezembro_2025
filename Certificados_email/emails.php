@@ -202,11 +202,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// Buscar estatísticas
+// Inicializar variáveis com valores padrão
+$total_users = 0;
+$total_subscribers = 0;
+$total_sent = 0;
+$recent_emails = [];
+$next_lecture = null;
+$all_lectures = [];
+$all_users = [];
+$db_errors = [];
+
+// Buscar estatísticas - com tratamento de erro individual para cada query
 try {
     $stmt = $pdo->query("SELECT COUNT(*) as total FROM users WHERE is_active = 1");
-    $total_users = $stmt->fetch()['total'];
-    
+    $result = $stmt->fetch();
+    $total_users = $result ? $result['total'] : 0;
+} catch (PDOException $e) {
+    $db_errors[] = "Erro ao contar usuários: " . $e->getMessage();
+    error_log("[Emails] " . end($db_errors));
+}
+
+try {
     $stmt = $pdo->query("
         SELECT COUNT(*) as total FROM users 
         WHERE is_active = 1 AND (
@@ -214,57 +230,102 @@ try {
             OR (subscription_expires IS NOT NULL AND subscription_expires > NOW())
         )
     ");
-    $total_subscribers = $stmt->fetch()['total'];
-    
+    $result = $stmt->fetch();
+    $total_subscribers = $result ? $result['total'] : 0;
+} catch (PDOException $e) {
+    $db_errors[] = "Erro ao contar assinantes: " . $e->getMessage();
+    error_log("[Emails] " . end($db_errors));
+}
+
+try {
     $stmt = $pdo->query("SELECT COUNT(*) as total FROM email_logs WHERE status = 'sent'");
-    $total_sent = $stmt->fetch()['total'];
-    
+    $result = $stmt->fetch();
+    $total_sent = $result ? $result['total'] : 0;
+} catch (PDOException $e) {
+    $db_errors[] = "Erro ao contar emails: " . $e->getMessage();
+    error_log("[Emails] " . end($db_errors));
+}
+
+try {
     $stmt = $pdo->query("SELECT * FROM email_logs ORDER BY created_at DESC LIMIT 10");
-    $recent_emails = $stmt->fetchAll();
-    
-    // Buscar próxima palestra (usando upcoming_announcements ou lectures)
+    $recent_emails = $stmt->fetchAll() ?: [];
+} catch (PDOException $e) {
+    $db_errors[] = "Erro ao buscar histórico de emails: " . $e->getMessage();
+    error_log("[Emails] " . end($db_errors));
+}
+
+// Buscar próxima palestra agendada
+try {
+    // Primeiro tentar a tabela upcoming_announcements
     $stmt = $pdo->query("
-        SELECT l.*, ua.announcement_date, ua.announcement_time 
-        FROM lectures l 
-        LEFT JOIN upcoming_announcements ua ON l.id = ua.lecture_id
+        SELECT l.id, l.title, l.speaker, l.description, ua.announcement_date, ua.announcement_time 
+        FROM upcoming_announcements ua
+        INNER JOIN lectures l ON l.id = ua.lecture_id
         WHERE ua.announcement_date >= CURDATE() 
         ORDER BY ua.announcement_date ASC, ua.announcement_time ASC 
         LIMIT 1
     ");
     $next_lecture = $stmt->fetch();
-    
-    // Se não encontrou em upcoming_announcements, buscar em lectures
-    if (!$next_lecture) {
-        $stmt = $pdo->query("SELECT * FROM lectures WHERE is_live = 1 ORDER BY created_at DESC LIMIT 1");
+} catch (PDOException $e) {
+    $db_errors[] = "Erro ao buscar palestra agendada (upcoming_announcements): " . $e->getMessage();
+    error_log("[Emails] " . end($db_errors));
+}
+
+// Se não encontrou em upcoming_announcements, buscar em lectures com is_live
+if (!$next_lecture) {
+    try {
+        $stmt = $pdo->query("SELECT id, title, speaker, description FROM lectures WHERE is_live = 1 ORDER BY created_at DESC LIMIT 1");
         $next_lecture = $stmt->fetch();
+    } catch (PDOException $e) {
+        $db_errors[] = "Erro ao buscar palestra ao vivo: " . $e->getMessage();
+        error_log("[Emails] " . end($db_errors));
     }
-    
-    // Buscar todas as palestras para o dropdown
+}
+
+// Buscar todas as palestras para o dropdown
+try {
     $stmt = $pdo->query("SELECT id, title, speaker FROM lectures ORDER BY title ASC");
-    $all_lectures = $stmt->fetchAll();
-    
-    // Buscar todos os usuários ativos para a lista de seleção
+    $all_lectures = $stmt->fetchAll() ?: [];
+} catch (PDOException $e) {
+    $db_errors[] = "Erro ao buscar palestras: " . $e->getMessage();
+    error_log("[Emails] " . end($db_errors));
+}
+
+// Buscar todos os usuários ativos para a lista de seleção
+try {
     $stmt = $pdo->query("
-        SELECT id, name, email, role, is_subscriber,
+        SELECT id, name, email, role, 
+               COALESCE(is_subscriber, 0) as is_subscriber,
                CASE 
                    WHEN role = 'admin' THEN 'Admin'
-                   WHEN is_subscriber = 1 OR role = 'subscriber' THEN 'Assinante'
+                   WHEN COALESCE(is_subscriber, 0) = 1 OR role = 'subscriber' THEN 'Assinante'
                    ELSE 'Free'
                END as user_type
         FROM users 
-        WHERE is_active = 1 
+        WHERE COALESCE(is_active, 1) = 1 
         ORDER BY name ASC
     ");
-    $all_users = $stmt->fetchAll();
+    $all_users = $stmt->fetchAll() ?: [];
+} catch (PDOException $e) {
+    $db_errors[] = "Erro ao buscar usuários: " . $e->getMessage();
+    error_log("[Emails] " . end($db_errors));
     
-} catch (Exception $e) {
-    $total_users = 0;
-    $total_subscribers = 0;
-    $total_sent = 0;
-    $recent_emails = [];
-    $next_lecture = null;
-    $all_lectures = [];
-    $all_users = [];
+    // Tentar query mais simples
+    try {
+        $stmt = $pdo->query("SELECT id, name, email, role FROM users ORDER BY name ASC");
+        $result = $stmt->fetchAll();
+        if ($result) {
+            $all_users = [];
+            foreach ($result as $user) {
+                $user['is_subscriber'] = 0;
+                $user['user_type'] = ($user['role'] == 'admin') ? 'Admin' : (($user['role'] == 'subscriber') ? 'Assinante' : 'Free');
+                $all_users[] = $user;
+            }
+        }
+    } catch (PDOException $e2) {
+        $db_errors[] = "Erro na query simplificada de usuários: " . $e2->getMessage();
+        error_log("[Emails] " . end($db_errors));
+    }
 }
 
 // Verificar status da configuração de email
@@ -293,6 +354,17 @@ include __DIR__ . '/../vision/includes/sidebar.php';
     <?php if ($error): ?>
     <div class="error-alert">
         <i class="fas fa-exclamation-circle"></i> <?php echo $error; ?>
+    </div>
+    <?php endif; ?>
+    
+    <?php if (!empty($db_errors)): ?>
+    <div class="error-alert" style="background: rgba(245, 158, 11, 0.2); border-color: rgba(245, 158, 11, 0.5); color: #f59e0b;">
+        <i class="fas fa-database"></i> <strong>Avisos do banco de dados:</strong>
+        <ul style="margin: 10px 0 0 20px; padding: 0;">
+            <?php foreach ($db_errors as $db_error): ?>
+            <li><?php echo htmlspecialchars($db_error); ?></li>
+            <?php endforeach; ?>
+        </ul>
     </div>
     <?php endif; ?>
     
@@ -357,6 +429,17 @@ include __DIR__ . '/../vision/includes/sidebar.php';
         </div>
     </div>
     
+    <!-- Debug Info (remover em produção) -->
+    <div class="video-card glass-card" style="background: rgba(59, 130, 246, 0.1); border-color: rgba(59, 130, 246, 0.3);">
+        <h3 style="color: #3b82f6;"><i class="fas fa-bug"></i> Debug Info</h3>
+        <p style="color: rgba(255,255,255,0.8);">
+            <strong>Usuários carregados:</strong> <?php echo count($all_users); ?><br>
+            <strong>Palestras carregadas:</strong> <?php echo count($all_lectures); ?><br>
+            <strong>Próxima palestra:</strong> <?php echo $next_lecture ? htmlspecialchars($next_lecture['title']) : 'Nenhuma'; ?><br>
+            <strong>Conexão BD:</strong> <?php echo isset($pdo) ? 'OK' : 'ERRO'; ?>
+        </p>
+    </div>
+    
     <!-- Próxima Palestra -->
     <?php if ($next_lecture): ?>
     <div class="video-card glass-card">
@@ -418,6 +501,12 @@ include __DIR__ . '/../vision/includes/sidebar.php';
                 </div>
                 
                 <div class="users-list" id="usersList">
+                    <?php if (empty($all_users)): ?>
+                    <div style="padding: 20px; text-align: center; color: rgba(255,255,255,0.6);">
+                        <i class="fas fa-exclamation-triangle" style="font-size: 2rem; margin-bottom: 10px; display: block;"></i>
+                        Nenhum usuário encontrado no banco de dados.
+                    </div>
+                    <?php else: ?>
                     <?php foreach ($all_users as $user): ?>
                     <div class="user-item" data-name="<?php echo strtolower(htmlspecialchars($user['name'])); ?>" data-email="<?php echo strtolower(htmlspecialchars($user['email'])); ?>">
                         <label class="user-checkbox-label">
@@ -430,6 +519,7 @@ include __DIR__ . '/../vision/includes/sidebar.php';
                         </label>
                     </div>
                     <?php endforeach; ?>
+                    <?php endif; ?>
                 </div>
             </div>
             
@@ -740,13 +830,13 @@ function updateSelectedCount() {
 }
 
 // Busca de usuários
-document.getElementById('userSearch').addEventListener('input', function() {
+document.getElementById('userSearch')?.addEventListener('input', function() {
     const searchTerm = this.value.toLowerCase().trim();
     const items = document.querySelectorAll('.user-item');
     
     items.forEach(item => {
-        const name = item.dataset.name;
-        const email = item.dataset.email;
+        const name = item.dataset.name || '';
+        const email = item.dataset.email || '';
         
         if (searchTerm === '' || name.includes(searchTerm) || email.includes(searchTerm)) {
             item.style.display = 'block';
@@ -757,7 +847,7 @@ document.getElementById('userSearch').addEventListener('input', function() {
 });
 
 // Validação do formulário
-document.getElementById('emailForm').addEventListener('submit', function(e) {
+document.getElementById('emailForm')?.addEventListener('submit', function(e) {
     const recipientType = document.getElementById('recipient_type').value;
     
     if (recipientType === 'selected') {
