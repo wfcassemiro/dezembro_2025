@@ -536,3 +536,257 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 }
+
+// Função para extrair informações do padrão S##E##
+function extractSeasonEpisode($title) {
+    // Padrão: S## seguido opcionalmente por E##
+    if (preg_match('/^S(\d{1,2})(?:E(\d{1,2}))?/i', $title, $matches)) {
+        $season = (int)$matches[1];
+        $episode = isset($matches[2]) ? (int)$matches[2] : 0;
+        return ['season' => $season, 'episode' => $episode, 'has_pattern' => true];
+    }
+    return ['season' => 999, 'episode' => 999, 'has_pattern' => false];
+}
+
+// Função de comparação personalizada para ordenação
+function sortLecturesForAdmin($lectures) {
+    // Separar palestras com padrão S##E## das demais
+    $withPattern = [];
+    $withoutPattern = [];
+    
+    foreach ($lectures as $lecture) {
+        $info = extractSeasonEpisode($lecture['title']);
+        if ($info['has_pattern']) {
+            $lecture['_sort_info'] = $info;
+            $withPattern[] = $lecture;
+        } else {
+            $withoutPattern[] = $lecture;
+        }
+    }
+    
+    // Ordenar palestras com padrão S##E## (ordem decrescente)
+    usort($withPattern, function($a, $b) {
+        $infoA = $a['_sort_info'];
+        $infoB = $b['_sort_info'];
+        
+        // Primeiro por season (decrescente)
+        if ($infoA['season'] !== $infoB['season']) {
+            return $infoB['season'] - $infoA['season'];
+        }
+        
+        // Depois por episode (decrescente)
+        return $infoB['episode'] - $infoA['episode'];
+    });
+    
+    // Ordenar palestras sem padrão (alfabética)
+    usort($withoutPattern, function($a, $b) {
+        return strcasecmp($a['title'], $b['title']);
+    });
+    
+    // Juntar as duas listas (com padrão primeiro, depois sem padrão)
+    return array_merge($withPattern, $withoutPattern);
+}
+
+// Carregar dados para os formulários
+try {
+    // Buscar certificados com informações de tempo assistido
+    $stmt = $pdo->query("
+        SELECT c.*, 
+               u.name as user_name, 
+               u.email, 
+               l.title as lecture_title, 
+               al.accumulated_watch_time,
+               al.last_watched_seconds
+        FROM certificates c 
+        LEFT JOIN users u ON c.user_id = u.id 
+        LEFT JOIN lectures l ON c.lecture_id = l.id 
+        LEFT JOIN access_logs al ON (c.user_id = al.user_id AND al.resource = l.title AND al.certificate_generated = 1)
+        ORDER BY c.issued_at DESC 
+        LIMIT 100
+    ");
+    $certificates = $stmt->fetchAll();
+    
+    // Buscar usuários para o formulário
+    $stmt = $pdo->query("SELECT id, name, email, role FROM users WHERE role IN ('subscriber', 'admin') ORDER BY name");
+    $users = $stmt->fetchAll();
+    
+    // Buscar palestras para o formulário (sem ordenação - será feita via PHP)
+    $stmt = $pdo->query("SELECT id, title, speaker, description, duration_minutes FROM lectures");
+    $all_lectures = $stmt->fetchAll();
+    
+    // Aplicar ordenação personalizada S##E## decrescente
+    $lectures = sortLecturesForAdmin($all_lectures);
+    
+    // Estatísticas
+    $stmt = $pdo->query("SELECT COUNT(*) FROM certificates");
+    $total_certificates = $stmt->fetchColumn();
+    
+    $stmt = $pdo->query("SELECT COUNT(DISTINCT user_id) FROM certificates");
+    $unique_users = $stmt->fetchColumn();
+    
+    $stmt = $pdo->query("SELECT COUNT(*) FROM certificates WHERE DATE(issued_at) = CURDATE()");
+    $today_certificates = $stmt->fetchColumn();
+    
+} catch (PDOException $e) {
+    $certificates = [];
+    $users = [];
+    $lectures = [];
+    $total_certificates = 0;
+    $unique_users = 0;
+    $today_certificates = 0;
+    $error = 'Erro ao carregar dados: ' . $e->getMessage();
+}
+
+include __DIR__ . '/../vision/includes/head.php';
+include __DIR__ . '/../vision/includes/header.php';
+include __DIR__ . '/../vision/includes/sidebar.php';
+?>
+
+<div class="main-content">
+    <div class="glass-hero">
+        <div class="hero-content">
+            <h1><i class="fas fa-certificate"></i> Gerenciar Certificados</h1>
+            <p>Sistema administrativo completo para certificados T101</p>
+        </div>
+    </div>
+
+    <?php if ($message): ?>
+        <div class="success-alert">
+            <i class="fas fa-check-circle"></i> <?php echo htmlspecialchars($message); ?>
+        </div>
+    <?php endif; ?>
+
+    <?php if ($error): ?>
+        <div class="error-alert">
+            <i class="fas fa-exclamation-circle"></i> <?php echo htmlspecialchars($error); ?>
+        </div>
+    <?php endif; ?>
+
+    <!-- Estatísticas -->
+    <div class="video-card glass-card">
+        <h3><i class="fas fa-chart-bar"></i> Estatísticas</h3>
+        <div class="stats-grid">
+            <div class="stat-item">
+                <div class="stat-number"><?php echo $total_certificates; ?></div>
+                <div class="stat-label">Total de certificados</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-number"><?php echo $unique_users; ?></div>
+                <div class="stat-label">Usuários com certificados</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-number"><?php echo $today_certificates; ?></div>
+                <div class="stat-label">Emitidos hoje</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Ações Administrativas -->
+    <div class="video-card glass-card">
+        <h2><i class="fas fa-tools"></i> Ações administrativas</h2>
+        
+        <!-- Formulário Gerar Certificado -->
+        <div class="admin-form-section">
+            <h3><i class="fas fa-plus-circle"></i> Gerar certificados T101</h3>
+            <form method="POST" class="admin-form">
+                
+                <!-- Botão de Gerar no Topo -->
+                <div class="generate-section">
+                    <button type="submit" name="generate_certificates" class="cta-btn generate-btn" id="generate_btn" disabled>
+                        <i class="fas fa-certificate"></i> Selecione as palestras para gerar certificados
+                    </button>
+                    <p class="generate-info">
+                        <i class="fas fa-info-circle"></i> 
+                        Um e-mail será enviado automaticamente após a geração
+                    </p>
+                </div>
+                
+                <div class="form-group">
+                    <label for="user_id">Selecionar usuário *</label>
+                    <select name="user_id" id="user_id" required class="form-control">
+                        <option value="">Escolha um usuário...</option>
+                        <?php foreach ($users as $user): ?>
+                            <option value="<?php echo $user['id']; ?>">
+                                <?php echo htmlspecialchars($user['name']); ?> 
+                                (<?php echo htmlspecialchars($user['email']); ?>) 
+                                [<?php echo $user['role']; ?>]
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                
+                <div class="form-group full-width">
+                    <label for="lecture_ids">Selecionar palestras * - Ordenação S##E## Decrescente</label>
+                    
+                    <!-- Campo de Busca -->
+                    <div class="search-section">
+                        <div class="search-box">
+                            <i class="fas fa-search"></i>
+                            <input type="text" id="lecture_search" placeholder="Buscar palestras por título..." class="search-input">
+                            <button type="button" id="clear_search" class="clear-search" title="Limpar busca">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Controles de seleção -->
+                    <div class="select-controls">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="select_all_lectures"> 
+                            Selecionar todas as palestras visíveis
+                        </label>
+                        <span class="lectures-count">
+                            <span id="visible_count"><?php echo count($lectures); ?></span> de <?php echo count($lectures); ?> palestras
+                        </span>
+                    </div>
+
+                    <!-- Grid de cards das palestras -->
+                    <div class="lectures-cards-grid" id="lectures_grid">
+                        <?php foreach ($lectures as $lecture): 
+                            $seasonInfo = extractSeasonEpisode($lecture['title']);
+                            $hasPattern = $seasonInfo['has_pattern'];
+                        ?>
+                            <div class="lecture-card" data-title="<?php echo strtolower(htmlspecialchars($lecture['title'])); ?>">
+                                <div class="lecture-card-header">
+                                    <input type="checkbox" name="lecture_ids[]" value="<?php echo $lecture['id']; ?>" 
+                                           class="lecture-checkbox" id="lecture_<?php echo $lecture['id']; ?>">
+                                    <label for="lecture_<?php echo $lecture['id']; ?>" class="lecture-card-label">
+                                        <span class="lecture-title">
+                                            <?php echo htmlspecialchars($lecture['title']); ?>
+                                            
+                                            <?php if ($hasPattern): ?>
+                                                <span class="season-badge">
+                                                    S<?php echo sprintf('%02d', $seasonInfo['season']); ?><?php echo $seasonInfo['episode'] > 0 ? 'E'.sprintf('%02d', $seasonInfo['episode']) : ''; ?>
+                                                </span>
+                                            <?php endif; ?>
+                                        </span>
+                                    </label>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                    
+                    <?php if (empty($lectures)): ?>
+                        <div class="empty-lectures">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <p>Nenhuma palestra encontrada no sistema.</p>
+                        </div>
+                    <?php endif; ?>
+                    
+                    <!-- Estado sem resultados de busca -->
+                    <div class="no-results" id="no_results" style="display: none;">
+                        <i class="fas fa-search"></i>
+                        <p>Nenhuma palestra encontrada com este termo de busca.</p>
+                    </div>
+                </div>
+                
+                <div class="options-row">
+                    <label class="checkbox-label">
+                        <input type="checkbox" name="force_generate" value="1"> 
+                        Forçar geração (substitui certificados existentes)
+                    </label>
+                    
+                    <!-- Email automático (hidden) -->
+                    <input type="hidden" name="send_email" value="1">
+                </div>
+            </form>
