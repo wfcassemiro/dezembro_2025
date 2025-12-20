@@ -20,10 +20,12 @@ $error = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
     
+    // Envio de email (modo normal ou seleção individual)
     if ($action === 'send_email') {
-        $recipient_type = $_POST['recipient_type'];
-        $subject = trim($_POST['subject']);
-        $message_body = trim($_POST['message']);
+        $recipient_type = $_POST['recipient_type'] ?? 'all';
+        $selected_users = $_POST['selected_users'] ?? [];
+        $subject = trim($_POST['subject'] ?? '');
+        $message_body = trim($_POST['message'] ?? '');
         $access_link = trim($_POST['access_link'] ?? '');
         $lecture_id = $_POST['lecture_id'] ?? null;
         
@@ -31,12 +33,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $error = 'Assunto e mensagem são obrigatórios.';
         } else {
             try {
-                // Buscar destinatários
-                if ($recipient_type === 'all') {
-                    $stmt = $pdo->query("SELECT email, name FROM users WHERE is_active = 1");
+                // Buscar destinatários baseado no tipo de seleção
+                if ($recipient_type === 'selected' && !empty($selected_users)) {
+                    // Usuários selecionados individualmente
+                    $placeholders = implode(',', array_fill(0, count($selected_users), '?'));
+                    $stmt = $pdo->prepare("SELECT id, email, name FROM users WHERE id IN ($placeholders) AND is_active = 1");
+                    $stmt->execute($selected_users);
+                    $recipients = $stmt->fetchAll();
+                } elseif ($recipient_type === 'all') {
+                    $stmt = $pdo->query("SELECT id, email, name FROM users WHERE is_active = 1");
+                    $recipients = $stmt->fetchAll();
                 } elseif ($recipient_type === 'subscribers') {
                     $stmt = $pdo->query("
-                        SELECT email, name FROM users 
+                        SELECT id, email, name FROM users 
                         WHERE is_active = 1 
                         AND (
                             is_subscriber = 1 
@@ -44,24 +53,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             OR (subscription_expires IS NOT NULL AND subscription_expires > NOW())
                         )
                     ");
+                    $recipients = $stmt->fetchAll();
                 } else {
                     $stmt = $pdo->query("
-                        SELECT email, name FROM users 
+                        SELECT id, email, name FROM users 
                         WHERE is_active = 1 
                         AND (is_subscriber = 0 OR is_subscriber IS NULL)
                         AND role != 'subscriber'
                         AND (subscription_expires IS NULL OR subscription_expires <= NOW())
                     ");
+                    $recipients = $stmt->fetchAll();
                 }
-                
-                $recipients = $stmt->fetchAll();
                 
                 if (empty($recipients)) {
                     $error = 'Nenhum destinatário encontrado para esta seleção.';
                 } else {
-                    // CORREÇÃO: Verificar se o email está configurado corretamente
+                    // Verificar se o email está configurado
                     if (isEmailConfigured()) {
-                        // Enviar emails usando o sistema corrigido
                         $emailSender = new EmailSender();
                         
                         $sent_count = 0;
@@ -94,8 +102,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     $failed_emails[] = $recipient['email'];
                                 }
                                 
-                                // Pequena pausa para não sobrecarregar o servidor SMTP
-                                usleep(100000); // 100ms
+                                usleep(100000); // 100ms de pausa
                                 
                             } catch (Exception $e) {
                                 $failed_count++;
@@ -118,7 +125,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $log_status = ($sent_count > 0) ? 'sent' : 'failed';
                         
                     } else {
-                        // Sistema de email não configurado
                         $error = "⚠️ Sistema de email não configurado. Configure as credenciais SMTP em email_config.php";
                         $log_status = 'config_error';
                         $sent_count = 0;
@@ -216,14 +222,49 @@ try {
     $stmt = $pdo->query("SELECT * FROM email_logs ORDER BY created_at DESC LIMIT 10");
     $recent_emails = $stmt->fetchAll();
     
-    $stmt = $pdo->query("SELECT * FROM lectures WHERE announcement_date >= CURDATE() ORDER BY announcement_date ASC LIMIT 1");
+    // Buscar próxima palestra (usando upcoming_announcements ou lectures)
+    $stmt = $pdo->query("
+        SELECT l.*, ua.announcement_date, ua.announcement_time 
+        FROM lectures l 
+        LEFT JOIN upcoming_announcements ua ON l.id = ua.lecture_id
+        WHERE ua.announcement_date >= CURDATE() 
+        ORDER BY ua.announcement_date ASC, ua.announcement_time ASC 
+        LIMIT 1
+    ");
     $next_lecture = $stmt->fetch();
+    
+    // Se não encontrou em upcoming_announcements, buscar em lectures
+    if (!$next_lecture) {
+        $stmt = $pdo->query("SELECT * FROM lectures WHERE is_live = 1 ORDER BY created_at DESC LIMIT 1");
+        $next_lecture = $stmt->fetch();
+    }
+    
+    // Buscar todas as palestras para o dropdown
+    $stmt = $pdo->query("SELECT id, title, speaker FROM lectures ORDER BY title ASC");
+    $all_lectures = $stmt->fetchAll();
+    
+    // Buscar todos os usuários ativos para a lista de seleção
+    $stmt = $pdo->query("
+        SELECT id, name, email, role, is_subscriber,
+               CASE 
+                   WHEN role = 'admin' THEN 'Admin'
+                   WHEN is_subscriber = 1 OR role = 'subscriber' THEN 'Assinante'
+                   ELSE 'Free'
+               END as user_type
+        FROM users 
+        WHERE is_active = 1 
+        ORDER BY name ASC
+    ");
+    $all_users = $stmt->fetchAll();
+    
 } catch (Exception $e) {
     $total_users = 0;
     $total_subscribers = 0;
     $total_sent = 0;
     $recent_emails = [];
     $next_lecture = null;
+    $all_lectures = [];
+    $all_users = [];
 }
 
 // Verificar status da configuração de email
@@ -316,51 +357,110 @@ include __DIR__ . '/../vision/includes/sidebar.php';
         </div>
     </div>
     
+    <!-- Próxima Palestra -->
+    <?php if ($next_lecture): ?>
+    <div class="video-card glass-card">
+        <h3><i class="fas fa-calendar-alt"></i> Próxima Palestra</h3>
+        <div class="next-lecture-info">
+            <div class="lecture-details">
+                <h4><?php echo htmlspecialchars($next_lecture['title']); ?></h4>
+                <p><i class="fas fa-user"></i> <?php echo htmlspecialchars($next_lecture['speaker']); ?></p>
+                <?php if (isset($next_lecture['announcement_date'])): ?>
+                <p><i class="fas fa-calendar"></i> <?php echo date('d/m/Y', strtotime($next_lecture['announcement_date'])); ?>
+                    <?php if (isset($next_lecture['announcement_time'])): ?>
+                    às <?php echo $next_lecture['announcement_time']; ?>
+                    <?php endif; ?>
+                </p>
+                <?php endif; ?>
+            </div>
+            <button type="button" class="cta-btn" onclick="useNextLectureTemplate()">
+                <i class="fas fa-envelope"></i> Criar Email sobre esta Palestra
+            </button>
+        </div>
+    </div>
+    <?php endif; ?>
+    
     <!-- Formulário de Envio -->
     <div class="video-card glass-card">
         <h3><i class="fas fa-edit"></i> Enviar Novo E-mail</h3>
         
-        <form method="POST" class="admin-form">
+        <form method="POST" class="admin-form" id="emailForm">
             <input type="hidden" name="action" value="send_email">
             
-            <div class="form-row">
+            <!-- Tipo de Destinatário -->
+            <div class="form-group">
+                <label><i class="fas fa-users"></i> Tipo de Destinatários</label>
+                <select name="recipient_type" id="recipient_type" class="form-control" onchange="toggleUserSelection()">
+                    <option value="all">Todos os Usuários (<?php echo $total_users; ?>)</option>
+                    <option value="subscribers">Apenas Assinantes (<?php echo $total_subscribers; ?>)</option>
+                    <option value="non_subscribers">Não Assinantes (<?php echo $total_users - $total_subscribers; ?>)</option>
+                    <option value="selected">Selecionar Usuários Individualmente</option>
+                </select>
+            </div>
+            
+            <!-- Seleção Individual de Usuários -->
+            <div id="userSelectionContainer" style="display: none;">
                 <div class="form-group">
-                    <label><i class="fas fa-users"></i> Destinatários</label>
-                    <select name="recipient_type" class="form-control" required>
-                        <option value="all">Todos os Usuários (<?php echo $total_users; ?>)</option>
-                        <option value="subscribers">Apenas Assinantes (<?php echo $total_subscribers; ?>)</option>
-                        <option value="non_subscribers">Não Assinantes (<?php echo $total_users - $total_subscribers; ?>)</option>
-                    </select>
+                    <label><i class="fas fa-search"></i> Buscar Usuário</label>
+                    <input type="text" id="userSearch" class="form-control" placeholder="Digite o nome ou email para buscar...">
                 </div>
                 
-                <div class="form-group">
-                    <label><i class="fas fa-chalkboard-teacher"></i> Palestra Relacionada (opcional)</label>
-                    <select name="lecture_id" class="form-control">
-                        <option value="">Nenhuma</option>
-                        <?php
-                        $lectures = $pdo->query("SELECT id, title FROM lectures ORDER BY announcement_date DESC LIMIT 20")->fetchAll();
-                        foreach ($lectures as $lecture):
-                        ?>
-                        <option value="<?php echo $lecture['id']; ?>"><?php echo htmlspecialchars($lecture['title']); ?></option>
-                        <?php endforeach; ?>
-                    </select>
+                <div class="selection-controls">
+                    <button type="button" class="btn-secondary" onclick="selectAllUsers()">
+                        <i class="fas fa-check-square"></i> Selecionar Todos
+                    </button>
+                    <button type="button" class="btn-secondary" onclick="deselectAllUsers()">
+                        <i class="fas fa-square"></i> Desmarcar Todos
+                    </button>
+                    <span class="selected-count">
+                        <span id="selectedCount">0</span> usuário(s) selecionado(s)
+                    </span>
+                </div>
+                
+                <div class="users-list" id="usersList">
+                    <?php foreach ($all_users as $user): ?>
+                    <div class="user-item" data-name="<?php echo strtolower(htmlspecialchars($user['name'])); ?>" data-email="<?php echo strtolower(htmlspecialchars($user['email'])); ?>">
+                        <label class="user-checkbox-label">
+                            <input type="checkbox" name="selected_users[]" value="<?php echo $user['id']; ?>" class="user-checkbox" onchange="updateSelectedCount()">
+                            <div class="user-info">
+                                <span class="user-name"><?php echo htmlspecialchars($user['name']); ?></span>
+                                <span class="user-email"><?php echo htmlspecialchars($user['email']); ?></span>
+                            </div>
+                            <span class="user-type-badge <?php echo strtolower($user['user_type']); ?>"><?php echo $user['user_type']; ?></span>
+                        </label>
+                    </div>
+                    <?php endforeach; ?>
                 </div>
             </div>
             
+            <!-- Palestra Relacionada -->
             <div class="form-group">
-                <label><i class="fas fa-heading"></i> Assunto</label>
-                <input type="text" name="subject" class="form-control" placeholder="Assunto do e-mail" required>
+                <label><i class="fas fa-chalkboard-teacher"></i> Palestra Relacionada (opcional)</label>
+                <select name="lecture_id" id="lecture_id" class="form-control">
+                    <option value="">Nenhuma</option>
+                    <?php foreach ($all_lectures as $lecture): ?>
+                    <option value="<?php echo $lecture['id']; ?>"><?php echo htmlspecialchars($lecture['title']); ?> - <?php echo htmlspecialchars($lecture['speaker']); ?></option>
+                    <?php endforeach; ?>
+                </select>
             </div>
             
+            <!-- Assunto -->
+            <div class="form-group">
+                <label><i class="fas fa-heading"></i> Assunto</label>
+                <input type="text" name="subject" id="subject" class="form-control" placeholder="Assunto do e-mail" required>
+            </div>
+            
+            <!-- Link de Acesso -->
             <div class="form-group">
                 <label><i class="fas fa-link"></i> Link de Acesso (opcional)</label>
-                <input type="url" name="access_link" class="form-control" placeholder="https://...">
+                <input type="url" name="access_link" id="access_link" class="form-control" placeholder="https://...">
                 <small style="color: rgba(255,255,255,0.6); display: block; margin-top: 5px;">Use [LINK] no corpo do email para inserir este link</small>
             </div>
             
+            <!-- Mensagem -->
             <div class="form-group">
                 <label><i class="fas fa-align-left"></i> Mensagem</label>
-                <textarea name="message" class="form-control" rows="10" placeholder="Digite sua mensagem aqui...
+                <textarea name="message" id="message" class="form-control" rows="12" placeholder="Digite sua mensagem aqui...
 
 Use [NOME] para personalizar com o nome do destinatário.
 Use [LINK] para inserir o link de acesso." required></textarea>
@@ -379,7 +479,7 @@ Use [LINK] para inserir o link de acesso." required></textarea>
         <h3><i class="fas fa-magic"></i> Templates Rápidos</h3>
         
         <div class="quick-actions-grid">
-            <div class="quick-action-card" onclick="useTemplate('welcome')" style="cursor: pointer;">
+            <div class="quick-action-card" onclick="useTemplate('welcome')">
                 <div class="quick-action-icon" style="color: #3b82f6;">
                     <i class="fas fa-hand-wave"></i>
                 </div>
@@ -387,7 +487,7 @@ Use [LINK] para inserir o link de acesso." required></textarea>
                 <p>Novos usuários</p>
             </div>
             
-            <div class="quick-action-card" onclick="useTemplate('newsletter')" style="cursor: pointer;">
+            <div class="quick-action-card" onclick="useTemplate('newsletter')">
                 <div class="quick-action-icon" style="color: #8b5cf6;">
                     <i class="fas fa-newspaper"></i>
                 </div>
@@ -395,7 +495,7 @@ Use [LINK] para inserir o link de acesso." required></textarea>
                 <p>Novidades da semana</p>
             </div>
             
-            <div class="quick-action-card" onclick="useTemplate('promotion')" style="cursor: pointer;">
+            <div class="quick-action-card" onclick="useTemplate('promotion')">
                 <div class="quick-action-icon" style="color: #10b981;">
                     <i class="fas fa-percentage"></i>
                 </div>
@@ -403,12 +503,28 @@ Use [LINK] para inserir o link de acesso." required></textarea>
                 <p>Ofertas especiais</p>
             </div>
             
-            <div class="quick-action-card" onclick="useTemplate('reminder')" style="cursor: pointer;">
+            <div class="quick-action-card" onclick="useTemplate('reminder')">
                 <div class="quick-action-icon" style="color: #ef4444;">
                     <i class="fas fa-bell"></i>
                 </div>
                 <h4>Lembrete</h4>
                 <p>Informações importantes</p>
+            </div>
+            
+            <div class="quick-action-card" onclick="useTemplate('lecture')">
+                <div class="quick-action-icon" style="color: #f59e0b;">
+                    <i class="fas fa-video"></i>
+                </div>
+                <h4>Nova Palestra</h4>
+                <p>Anúncio de palestra</p>
+            </div>
+            
+            <div class="quick-action-card" onclick="useTemplate('certificate')">
+                <div class="quick-action-icon" style="color: #ec4899;">
+                    <i class="fas fa-certificate"></i>
+                </div>
+                <h4>Certificado</h4>
+                <p>Certificado disponível</p>
             </div>
         </div>
     </div>
@@ -453,33 +569,217 @@ Use [LINK] para inserir o link de acesso." required></textarea>
 </div>
 
 <script>
+// Templates de email
+const templates = {
+    welcome: {
+        subject: 'Bem-vindo(a) à Translators101!',
+        message: `Olá [NOME],
+
+Seja bem-vindo(a) à nossa plataforma educacional para profissionais de tradução!
+
+Aqui você encontrará palestras exclusivas, glossários especializados e muito conteúdo para aprimorar suas habilidades profissionais.
+
+Comece explorando nossa videoteca e não perca nenhuma novidade!
+
+Equipe Translators101`
+    },
+    newsletter: {
+        subject: 'Translators101 - Novidades da Semana',
+        message: `Olá [NOME],
+
+Confira as principais novidades desta semana:
+
+• Nova palestra adicionada
+• Glossário atualizado
+• Certificados disponíveis para download
+
+Acesse nossa plataforma e aproveite todo o conteúdo!
+
+Equipe Translators101`
+    },
+    promotion: {
+        subject: 'Oferta Especial - Translators101',
+        message: `Olá [NOME],
+
+Temos uma oferta especial para você!
+
+[Detalhes da promoção]
+
+Esta oferta é válida por tempo limitado. Não perca!
+
+Acesse: [LINK]
+
+Equipe Translators101`
+    },
+    reminder: {
+        subject: 'Lembrete Importante - Translators101',
+        message: `Olá [NOME],
+
+Este é um lembrete importante sobre:
+
+[Conteúdo do lembrete]
+
+Para mais informações, acesse nossa plataforma.
+
+Equipe Translators101`
+    },
+    lecture: {
+        subject: '🎬 Nova Palestra Disponível - Translators101',
+        message: `Olá [NOME],
+
+Uma nova palestra foi adicionada à plataforma!
+
+📚 [Título da Palestra]
+👤 Palestrante: [Nome do Palestrante]
+⏱️ Duração: [XX] minutos
+
+Não perca a oportunidade de aprender com os melhores profissionais do mercado.
+
+Acesse agora: [LINK]
+
+Equipe Translators101`
+    },
+    certificate: {
+        subject: '🎓 Seu Certificado está Disponível - Translators101',
+        message: `Olá [NOME],
+
+Parabéns! Seu certificado de participação está disponível para download.
+
+Acesse sua área de certificados para baixar:
+[LINK]
+
+Continue participando das nossas palestras e amplie seu portfólio de certificados!
+
+Equipe Translators101`
+    }
+};
+
+// Dados da próxima palestra (se existir)
+<?php if ($next_lecture): ?>
+const nextLecture = {
+    title: <?php echo json_encode($next_lecture['title']); ?>,
+    speaker: <?php echo json_encode($next_lecture['speaker']); ?>,
+    date: <?php echo isset($next_lecture['announcement_date']) ? json_encode(date('d/m/Y', strtotime($next_lecture['announcement_date']))) : '""'; ?>,
+    time: <?php echo isset($next_lecture['announcement_time']) ? json_encode($next_lecture['announcement_time']) : '""'; ?>
+};
+<?php else: ?>
+const nextLecture = null;
+<?php endif; ?>
+
 function useTemplate(type) {
-    const templates = {
-        welcome: {
-            subject: 'Bem-vindo(a) à Translators101!',
-            message: 'Olá [NOME],\n\nSeja bem-vindo(a) à nossa plataforma educacional para profissionais de tradução!\n\nAqui você encontrará palestras exclusivas, glossários especializados e muito conteúdo para aprimorar suas habilidades profissionais.\n\nComece explorando nossa videoteca e não perca nenhuma novidade!\n\nEquipe Translators101'
-        },
-        newsletter: {
-            subject: 'Translators101 - Novidades da Semana',
-            message: 'Olá [NOME],\n\nConfira as principais novidades desta semana:\n\n• Nova palestra adicionada\n• Glossário atualizado\n• Certificados disponíveis para download\n\nAcesse nossa plataforma e aproveite todo o conteúdo!\n\nEquipe Translators101'
-        },
-        promotion: {
-            subject: 'Oferta Especial - Translators101',
-            message: 'Olá [NOME],\n\nTemos uma oferta especial para você!\n\n[Detalhes da promoção]\n\nEsta oferta é válida por tempo limitado. Não perca!\n\nAcesse: [LINK]\n\nEquipe Translators101'
-        },
-        reminder: {
-            subject: 'Lembrete Importante - Translators101',
-            message: 'Olá [NOME],\n\nEste é um lembrete importante sobre:\n\n[Conteúdo do lembrete]\n\nPara mais informações, acesse nossa plataforma.\n\nEquipe Translators101'
-        }
-    };
-    
     if (templates[type]) {
-        document.querySelector('input[name="subject"]').value = templates[type].subject;
-        document.querySelector('textarea[name="message"]').value = templates[type].message;
-        document.querySelector('input[name="access_link"]').value = '';
-        document.querySelector('select[name="lecture_id"]').value = '';
+        document.getElementById('subject').value = templates[type].subject;
+        document.getElementById('message').value = templates[type].message;
+        document.getElementById('access_link').value = '';
+        document.getElementById('lecture_id').value = '';
+        
+        // Scroll para o formulário
+        document.getElementById('emailForm').scrollIntoView({ behavior: 'smooth' });
     }
 }
+
+function useNextLectureTemplate() {
+    if (nextLecture) {
+        let dateInfo = '';
+        if (nextLecture.date) {
+            dateInfo = `📅 Data: ${nextLecture.date}`;
+            if (nextLecture.time) {
+                dateInfo += ` às ${nextLecture.time}`;
+            }
+        }
+        
+        document.getElementById('subject').value = `🎬 ${nextLecture.title} - Translators101`;
+        document.getElementById('message').value = `Olá [NOME],
+
+Temos uma palestra especial chegando!
+
+📚 ${nextLecture.title}
+👤 Palestrante: ${nextLecture.speaker}
+${dateInfo}
+
+Não perca a oportunidade de participar e aprender com os melhores profissionais do mercado.
+
+Mais informações em: [LINK]
+
+Equipe Translators101`;
+        
+        // Scroll para o formulário
+        document.getElementById('emailForm').scrollIntoView({ behavior: 'smooth' });
+    }
+}
+
+// Controle de seleção de usuários
+function toggleUserSelection() {
+    const recipientType = document.getElementById('recipient_type').value;
+    const container = document.getElementById('userSelectionContainer');
+    
+    if (recipientType === 'selected') {
+        container.style.display = 'block';
+    } else {
+        container.style.display = 'none';
+        // Desmarcar todos quando mudar para outro tipo
+        document.querySelectorAll('.user-checkbox').forEach(cb => cb.checked = false);
+        updateSelectedCount();
+    }
+}
+
+function selectAllUsers() {
+    const visibleItems = document.querySelectorAll('.user-item:not([style*="display: none"]) .user-checkbox');
+    visibleItems.forEach(cb => cb.checked = true);
+    updateSelectedCount();
+}
+
+function deselectAllUsers() {
+    document.querySelectorAll('.user-checkbox').forEach(cb => cb.checked = false);
+    updateSelectedCount();
+}
+
+function updateSelectedCount() {
+    const count = document.querySelectorAll('.user-checkbox:checked').length;
+    document.getElementById('selectedCount').textContent = count;
+}
+
+// Busca de usuários
+document.getElementById('userSearch').addEventListener('input', function() {
+    const searchTerm = this.value.toLowerCase().trim();
+    const items = document.querySelectorAll('.user-item');
+    
+    items.forEach(item => {
+        const name = item.dataset.name;
+        const email = item.dataset.email;
+        
+        if (searchTerm === '' || name.includes(searchTerm) || email.includes(searchTerm)) {
+            item.style.display = 'block';
+        } else {
+            item.style.display = 'none';
+        }
+    });
+});
+
+// Validação do formulário
+document.getElementById('emailForm').addEventListener('submit', function(e) {
+    const recipientType = document.getElementById('recipient_type').value;
+    
+    if (recipientType === 'selected') {
+        const selectedCount = document.querySelectorAll('.user-checkbox:checked').length;
+        if (selectedCount === 0) {
+            e.preventDefault();
+            alert('Por favor, selecione pelo menos um usuário para enviar o email.');
+            return false;
+        }
+        
+        if (!confirm(`Enviar email para ${selectedCount} usuário(s) selecionado(s)?`)) {
+            e.preventDefault();
+            return false;
+        }
+    } else {
+        const recipientText = document.querySelector(`#recipient_type option[value="${recipientType}"]`).textContent;
+        if (!confirm(`Enviar email para: ${recipientText}?`)) {
+            e.preventDefault();
+            return false;
+        }
+    }
+});
 </script>
 
 <style>
@@ -519,14 +819,37 @@ function useTemplate(type) {
     font-weight: 500;
 }
 
-/* Formulário */
-.form-row {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
+/* Próxima Palestra */
+.next-lecture-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
     gap: 20px;
-    margin-bottom: 20px;
+    margin-top: 15px;
+    padding: 20px;
+    background: rgba(245, 158, 11, 0.1);
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    border-radius: 12px;
 }
 
+.lecture-details h4 {
+    color: #f59e0b;
+    margin: 0 0 10px 0;
+    font-size: 1.2rem;
+}
+
+.lecture-details p {
+    margin: 5px 0;
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.lecture-details i {
+    width: 20px;
+    color: #f59e0b;
+}
+
+/* Formulário */
 .form-group {
     margin-bottom: 20px;
 }
@@ -568,24 +891,142 @@ function useTemplate(type) {
 
 textarea.form-control {
     resize: vertical;
-    min-height: 150px;
+    min-height: 200px;
+    font-family: inherit;
+}
+
+/* Seleção de Usuários */
+#userSelectionContainer {
+    background: rgba(30, 30, 30, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.selection-controls {
+    display: flex;
+    gap: 15px;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-bottom: 15px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.btn-secondary {
+    padding: 8px 16px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    color: white;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-size: 0.9rem;
+}
+
+.btn-secondary:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.selected-count {
+    margin-left: auto;
+    color: #c084fc;
+    font-weight: 600;
+}
+
+.users-list {
+    max-height: 400px;
+    overflow-y: auto;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    background: rgba(0, 0, 0, 0.2);
+}
+
+.user-item {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    transition: background 0.2s ease;
+}
+
+.user-item:last-child {
+    border-bottom: none;
+}
+
+.user-item:hover {
+    background: rgba(192, 132, 252, 0.1);
+}
+
+.user-checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 12px 15px;
+    cursor: pointer;
+    margin: 0;
+}
+
+.user-checkbox-label input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    accent-color: #c084fc;
+    cursor: pointer;
+}
+
+.user-info {
+    flex: 1;
+}
+
+.user-name {
+    display: block;
+    color: white;
+    font-weight: 500;
+}
+
+.user-email {
+    display: block;
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 0.85rem;
+}
+
+.user-type-badge {
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.user-type-badge.admin {
+    background: rgba(239, 68, 68, 0.2);
+    color: #ef4444;
+}
+
+.user-type-badge.assinante {
+    background: rgba(16, 185, 129, 0.2);
+    color: #10b981;
+}
+
+.user-type-badge.free {
+    background: rgba(156, 163, 175, 0.2);
+    color: #9ca3af;
 }
 
 /* Templates Rápidos */
 .quick-actions-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
     gap: 15px;
     margin-top: 20px;
 }
 
 .quick-action-card {
-    padding: 25px 15px;
+    padding: 20px 15px;
     text-align: center;
     background: rgba(30, 30, 30, 0.6);
     border-radius: 12px;
     transition: all 0.3s ease;
     border: 1px solid rgba(255, 255, 255, 0.1);
+    cursor: pointer;
 }
 
 .quick-action-card:hover {
@@ -602,13 +1043,13 @@ textarea.form-control {
 
 .quick-action-card h4 {
     margin: 10px 0 5px 0;
-    font-size: 1rem;
+    font-size: 0.95rem;
     color: white;
 }
 
 .quick-action-card p {
     margin: 0;
-    font-size: 0.85rem;
+    font-size: 0.8rem;
     color: rgba(255, 255, 255, 0.6);
 }
 
@@ -658,24 +1099,58 @@ textarea.form-control {
     background: rgba(0, 0, 0, 0.2);
 }
 
+/* Scrollbar customizado */
+.users-list::-webkit-scrollbar {
+    width: 8px;
+}
+
+.users-list::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 10px;
+}
+
+.users-list::-webkit-scrollbar-thumb {
+    background: rgba(192, 132, 252, 0.5);
+    border-radius: 10px;
+}
+
+.users-list::-webkit-scrollbar-thumb:hover {
+    background: rgba(192, 132, 252, 0.7);
+}
+
 /* Responsivo */
 @media (max-width: 768px) {
-    .form-row {
-        grid-template-columns: 1fr;
-    }
-    
     .stats-grid {
         grid-template-columns: 1fr 1fr;
     }
     
     .quick-actions-grid {
-        grid-template-columns: 1fr 1fr;
+        grid-template-columns: 1fr 1fr 1fr;
+    }
+    
+    .next-lecture-info {
+        flex-direction: column;
+        text-align: center;
+    }
+    
+    .selection-controls {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .selected-count {
+        margin-left: 0;
+        text-align: center;
     }
 }
 
 @media (max-width: 480px) {
     .stats-grid {
         grid-template-columns: 1fr;
+    }
+    
+    .quick-actions-grid {
+        grid-template-columns: 1fr 1fr;
     }
     
     .stat-number {
