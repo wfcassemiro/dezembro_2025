@@ -21,6 +21,48 @@ $BATCH_SIZE = 50; // Emails por lote
 $BATCH_DELAY = 2; // Segundos entre lotes
 $EMAIL_DELAY = 150000; // Microsegundos entre emails (150ms)
 
+// Arquivo para salvar templates personalizados
+$templates_file = __DIR__ . '/../config/email_templates.json';
+
+// Carregar templates salvos
+$saved_templates = [];
+if (file_exists($templates_file)) {
+    $saved_templates = json_decode(file_get_contents($templates_file), true) ?: [];
+}
+
+// Processar salvamento de template
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'save_template') {
+    $template_name = trim($_POST['template_name'] ?? '');
+    $template_subject = trim($_POST['template_subject'] ?? '');
+    $template_message = trim($_POST['template_message'] ?? '');
+    
+    if (!empty($template_name) && !empty($template_subject) && !empty($template_message)) {
+        $saved_templates[$template_name] = [
+            'subject' => $template_subject,
+            'message' => $template_message,
+            'updated_at' => date('Y-m-d H:i:s')
+        ];
+        
+        if (file_put_contents($templates_file, json_encode($saved_templates, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE))) {
+            $message = "✅ Template '$template_name' salvo com sucesso!";
+        } else {
+            $error = "❌ Erro ao salvar template. Verifique as permissões do diretório.";
+        }
+    } else {
+        $error = "❌ Nome, assunto e mensagem do template são obrigatórios.";
+    }
+}
+
+// Processar exclusão de template
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'delete_template') {
+    $template_name = $_POST['template_name'] ?? '';
+    if (isset($saved_templates[$template_name])) {
+        unset($saved_templates[$template_name]);
+        file_put_contents($templates_file, json_encode($saved_templates, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+        $message = "🗑️ Template '$template_name' excluído!";
+    }
+}
+
 // Processar envio de email
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
@@ -44,14 +86,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 
                 // Buscar destinatários baseado no tipo de seleção
                 if ($recipient_type === 'selected' && !empty($selected_users)) {
-                    // Usuários selecionados individualmente
                     $placeholders = implode(',', array_fill(0, count($selected_users), '?'));
                     $stmt = $pdo->prepare("SELECT id, email, name FROM users WHERE id IN ($placeholders) AND is_active = 1");
                     $stmt->execute($selected_users);
                     $recipients = $stmt->fetchAll();
                 } elseif ($recipient_type === 'custom') {
-                    // Emails personalizados (digitados manualmente)
-                    // Não busca do banco
+                    // Emails personalizados apenas
                 } elseif ($recipient_type === 'all') {
                     $stmt = $pdo->query("SELECT id, email, name FROM users WHERE is_active = 1");
                     $recipients = $stmt->fetchAll();
@@ -59,11 +99,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $stmt = $pdo->query("
                         SELECT id, email, name FROM users 
                         WHERE is_active = 1 
-                        AND (
-                            is_subscriber = 1 
-                            OR role = 'subscriber' 
-                            OR (subscription_expires IS NOT NULL AND subscription_expires > NOW())
-                        )
+                        AND (is_subscriber = 1 OR role = 'subscriber' OR (subscription_expires IS NOT NULL AND subscription_expires > NOW()))
                     ");
                     $recipients = $stmt->fetchAll();
                 } elseif ($recipient_type === 'non_subscribers') {
@@ -75,6 +111,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         AND (subscription_expires IS NULL OR subscription_expires <= NOW())
                     ");
                     $recipients = $stmt->fetchAll();
+                } elseif ($recipient_type === 'with_password') {
+                    $stmt = $pdo->query("SELECT id, email, name FROM users WHERE is_active = 1 AND password IS NOT NULL AND password != ''");
+                    $recipients = $stmt->fetchAll();
+                } elseif ($recipient_type === 'without_password') {
+                    $stmt = $pdo->query("SELECT id, email, name FROM users WHERE is_active = 1 AND (password IS NULL OR password = '')");
+                    $recipients = $stmt->fetchAll();
                 }
                 
                 // Adicionar emails personalizados
@@ -83,7 +125,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     foreach ($custom_list as $email) {
                         $email = trim($email);
                         if (filter_var($email, FILTER_VALIDATE_EMAIL)) {
-                            // Verificar se já não está na lista
                             $exists = false;
                             foreach ($recipients as $r) {
                                 if (strtolower($r['email']) === strtolower($email)) {
@@ -95,7 +136,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 $recipients[] = [
                                     'id' => null,
                                     'email' => $email,
-                                    'name' => explode('@', $email)[0] // Usar parte antes do @ como nome
+                                    'name' => explode('@', $email)[0]
                                 ];
                             }
                         }
@@ -105,7 +146,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if (empty($recipients)) {
                     $error = 'Nenhum destinatário encontrado. Verifique a seleção ou adicione emails manualmente.';
                 } else {
-                    // Verificar se o email está configurado
                     if (isEmailConfigured()) {
                         $emailSender = new EmailSender();
                         
@@ -115,27 +155,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $total_recipients = count($recipients);
                         $batch_count = 0;
                         
-                        // Processar em lotes
                         $batches = array_chunk($recipients, $batch_size);
                         
                         foreach ($batches as $batch_index => $batch) {
-                            // Delay entre lotes (exceto o primeiro)
                             if ($batch_index > 0) {
                                 sleep($BATCH_DELAY);
                             }
                             
                             foreach ($batch as $recipient) {
                                 try {
-                                    // Personalizar mensagem
                                     $personalized_message = str_replace('[NOME]', $recipient['name'], $message_body);
                                     if (!empty($access_link)) {
                                         $personalized_message = str_replace('[LINK]', $access_link, $personalized_message);
                                     }
                                     
-                                    // Criar HTML do email
                                     $html_content = EmailTemplates::getCustomEmailTemplate($subject, nl2br(htmlspecialchars($personalized_message)));
                                     
-                                    // Enviar email
                                     $result = $emailSender->sendEmail(
                                         $recipient['email'],
                                         $recipient['name'],
@@ -150,7 +185,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                         $failed_emails[] = $recipient['email'];
                                     }
                                     
-                                    usleep($EMAIL_DELAY); // Delay entre emails
+                                    usleep($EMAIL_DELAY);
                                     
                                 } catch (Exception $e) {
                                     $failed_count++;
@@ -252,39 +287,53 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// Inicializar variáveis com valores padrão
+// Inicializar variáveis
 $total_users = 0;
 $total_subscribers = 0;
 $total_sent = 0;
+$users_with_password = 0;
+$users_without_password = 0;
 $recent_emails = [];
 $next_lecture = null;
 $all_lectures = [];
 $all_users = [];
 $db_errors = [];
 
-// Buscar estatísticas - com tratamento de erro individual para cada query
+// Buscar estatísticas
 try {
     $stmt = $pdo->query("SELECT COUNT(*) as total FROM users WHERE is_active = 1");
     $result = $stmt->fetch();
     $total_users = $result ? $result['total'] : 0;
 } catch (PDOException $e) {
     $db_errors[] = "Erro ao contar usuários: " . $e->getMessage();
-    error_log("[Emails] " . end($db_errors));
 }
 
 try {
     $stmt = $pdo->query("
         SELECT COUNT(*) as total FROM users 
-        WHERE is_active = 1 AND (
-            is_subscriber = 1 OR role = 'subscriber' 
-            OR (subscription_expires IS NOT NULL AND subscription_expires > NOW())
-        )
+        WHERE is_active = 1 AND (is_subscriber = 1 OR role = 'subscriber' OR (subscription_expires IS NOT NULL AND subscription_expires > NOW()))
     ");
     $result = $stmt->fetch();
     $total_subscribers = $result ? $result['total'] : 0;
 } catch (PDOException $e) {
     $db_errors[] = "Erro ao contar assinantes: " . $e->getMessage();
-    error_log("[Emails] " . end($db_errors));
+}
+
+// Contar usuários com e sem senha
+try {
+    $stmt = $pdo->query("SELECT COUNT(*) as total FROM users WHERE is_active = 1 AND password IS NOT NULL AND password != ''");
+    $result = $stmt->fetch();
+    $users_with_password = $result ? $result['total'] : 0;
+} catch (PDOException $e) {
+    $db_errors[] = "Erro ao contar usuários com senha: " . $e->getMessage();
+}
+
+try {
+    $stmt = $pdo->query("SELECT COUNT(*) as total FROM users WHERE is_active = 1 AND (password IS NULL OR password = '')");
+    $result = $stmt->fetch();
+    $users_without_password = $result ? $result['total'] : 0;
+} catch (PDOException $e) {
+    $db_errors[] = "Erro ao contar usuários sem senha: " . $e->getMessage();
 }
 
 try {
@@ -293,7 +342,6 @@ try {
     $total_sent = $result ? $result['total'] : 0;
 } catch (PDOException $e) {
     $db_errors[] = "Erro ao contar emails: " . $e->getMessage();
-    error_log("[Emails] " . end($db_errors));
 }
 
 try {
@@ -301,26 +349,23 @@ try {
     $recent_emails = $stmt->fetchAll() ?: [];
 } catch (PDOException $e) {
     $db_errors[] = "Erro ao buscar histórico de emails: " . $e->getMessage();
-    error_log("[Emails] " . end($db_errors));
 }
 
-// Buscar próxima palestra agendada (da tabela upcoming_announcements)
+// Buscar próxima palestra agendada
 try {
     $stmt = $pdo->query("
         SELECT id, title, speaker, description, announcement_date, lecture_time, image_path
         FROM upcoming_announcements 
-        WHERE announcement_date >= CURDATE() 
-        AND is_active = 1
+        WHERE announcement_date >= CURDATE() AND is_active = 1
         ORDER BY announcement_date ASC, lecture_time ASC 
         LIMIT 1
     ");
     $next_lecture = $stmt->fetch();
 } catch (PDOException $e) {
     $db_errors[] = "Erro ao buscar palestra agendada: " . $e->getMessage();
-    error_log("[Emails] " . end($db_errors));
 }
 
-// Buscar TODAS as palestras agendadas para o dropdown (upcoming_announcements)
+// Buscar palestras agendadas para o dropdown
 try {
     $stmt = $pdo->query("
         SELECT id, title, speaker, announcement_date, lecture_time, description
@@ -331,14 +376,14 @@ try {
     $all_lectures = $stmt->fetchAll() ?: [];
 } catch (PDOException $e) {
     $db_errors[] = "Erro ao buscar palestras agendadas: " . $e->getMessage();
-    error_log("[Emails] " . end($db_errors));
 }
 
-// Buscar todos os usuários ativos para a lista de seleção
+// Buscar todos os usuários ativos
 try {
     $stmt = $pdo->query("
         SELECT id, name, email, role, 
                COALESCE(is_subscriber, 0) as is_subscriber,
+               CASE WHEN password IS NOT NULL AND password != '' THEN 1 ELSE 0 END as has_password,
                created_at,
                CASE 
                    WHEN role = 'admin' THEN 'Admin'
@@ -352,24 +397,6 @@ try {
     $all_users = $stmt->fetchAll() ?: [];
 } catch (PDOException $e) {
     $db_errors[] = "Erro ao buscar usuários: " . $e->getMessage();
-    error_log("[Emails] " . end($db_errors));
-    
-    // Tentar query mais simples
-    try {
-        $stmt = $pdo->query("SELECT id, name, email, role FROM users ORDER BY name ASC");
-        $result = $stmt->fetchAll();
-        if ($result) {
-            $all_users = [];
-            foreach ($result as $user) {
-                $user['is_subscriber'] = 0;
-                $user['user_type'] = ($user['role'] == 'admin') ? 'Admin' : (($user['role'] == 'subscriber') ? 'Assinante' : 'Free');
-                $all_users[] = $user;
-            }
-        }
-    } catch (PDOException $e2) {
-        $db_errors[] = "Erro na query simplificada de usuários: " . $e2->getMessage();
-        error_log("[Emails] " . end($db_errors));
-    }
 }
 
 // Verificar status da configuração de email
@@ -401,48 +428,49 @@ include __DIR__ . '/../vision/includes/sidebar.php';
     </div>
     <?php endif; ?>
     
-    <!-- Status da Configuração -->
-    <div class="video-card glass-card">
-        <div class="config-status" style="padding: 15px; border-radius: 10px; background: <?php echo $email_configured ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)'; ?>; border: 1px solid <?php echo $email_configured ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)'; ?>;">
-            <div style="display: flex; align-items: center; gap: 10px;">
-                <i class="fas <?php echo $email_configured ? 'fa-check-circle' : 'fa-exclamation-triangle'; ?>" style="color: <?php echo $email_configured ? '#10b981' : '#ef4444'; ?>; font-size: 1.5rem;"></i>
-                <div>
-                    <strong style="color: <?php echo $email_configured ? '#10b981' : '#ef4444'; ?>;">
-                        <?php echo $email_configured ? 'Sistema de Email Configurado' : 'Sistema de Email NÃO Configurado'; ?>
-                    </strong>
-                    <p style="margin: 5px 0 0 0; color: rgba(255,255,255,0.7); font-size: 0.9rem;">
-                        <?php if ($email_configured): ?>
-                            SMTP: <?php echo SMTP_HOST; ?>:<?php echo SMTP_PORT; ?> | Remetente: <?php echo SMTP_FROM_EMAIL; ?>
-                        <?php else: ?>
-                            Configure as credenciais SMTP em email_config.php para habilitar o envio de emails.
-                        <?php endif; ?>
-                    </p>
-                </div>
+    <!-- Status, Teste e Info em 3 colunas -->
+    <div class="three-column-grid">
+        <!-- Status da Configuração -->
+        <div class="video-card glass-card">
+            <h3 class="section-title"><i class="fas fa-cog"></i> Status SMTP</h3>
+            <div class="config-status-mini <?php echo $email_configured ? 'configured' : 'not-configured'; ?>">
+                <i class="fas <?php echo $email_configured ? 'fa-check-circle' : 'fa-exclamation-triangle'; ?>"></i>
+                <span><?php echo $email_configured ? 'Configurado' : 'Não Configurado'; ?></span>
             </div>
+            <?php if ($email_configured): ?>
+            <p class="smtp-info"><?php echo SMTP_HOST; ?>:<?php echo SMTP_PORT; ?></p>
+            <?php endif; ?>
         </div>
         
         <!-- Teste de Email -->
-        <?php if ($email_configured): ?>
-        <div class="admin-form-section" style="margin-top: 20px;">
-            <h3><i class="fas fa-flask"></i> Testar Configuração</h3>
-            <form method="POST" style="display: flex; gap: 15px; align-items: flex-end; flex-wrap: wrap;">
+        <div class="video-card glass-card">
+            <h3 class="section-title"><i class="fas fa-flask"></i> Testar Email</h3>
+            <form method="POST" class="test-form">
                 <input type="hidden" name="action" value="test_email">
-                <div class="form-group" style="flex: 1; min-width: 250px; margin-bottom: 0;">
-                    <label>Email para teste:</label>
-                    <input type="email" name="test_email" class="form-control" placeholder="seu@email.com" required>
-                </div>
-                <button type="submit" class="cta-btn" style="padding: 12px 25px;">
-                    <i class="fas fa-paper-plane"></i> Enviar Teste
+                <input type="email" name="test_email" class="form-control" placeholder="seu@email.com" required>
+                <button type="submit" class="cta-btn btn-small" <?php echo !$email_configured ? 'disabled' : ''; ?>>
+                    <i class="fas fa-paper-plane"></i> Testar
                 </button>
             </form>
         </div>
-        <?php endif; ?>
+        
+        <!-- Remetente -->
+        <div class="video-card glass-card">
+            <h3 class="section-title"><i class="fas fa-user-circle"></i> Remetente</h3>
+            <?php if ($email_configured): ?>
+            <p class="sender-info"><?php echo SMTP_FROM_NAME; ?></p>
+            <p class="sender-email"><?php echo SMTP_FROM_EMAIL; ?></p>
+            <?php else: ?>
+            <p class="sender-info">Não configurado</p>
+            <?php endif; ?>
+        </div>
     </div>
     
-    <!-- Estatísticas -->
+    <!-- Estatísticas - 2 linhas, 3 cards cada -->
     <div class="video-card glass-card">
-        <h3><i class="fas fa-chart-bar"></i> Estatísticas</h3>
-        <div class="stats-grid">
+        <h3 class="section-title"><i class="fas fa-chart-bar"></i> Estatísticas</h3>
+        
+        <div class="stats-row">
             <div class="stat-item">
                 <div class="stat-number"><?php echo $total_users; ?></div>
                 <div class="stat-label">Total de Usuários</div>
@@ -455,7 +483,18 @@ include __DIR__ . '/../vision/includes/sidebar.php';
                 <div class="stat-number"><?php echo $total_users - $total_subscribers; ?></div>
                 <div class="stat-label">Não Assinantes</div>
             </div>
-            <div class="stat-item">
+        </div>
+        
+        <div class="stats-row">
+            <div class="stat-item stat-green">
+                <div class="stat-number"><?php echo $users_with_password; ?></div>
+                <div class="stat-label">Com Senha</div>
+            </div>
+            <div class="stat-item stat-red">
+                <div class="stat-number"><?php echo $users_without_password; ?></div>
+                <div class="stat-label">Sem Senha</div>
+            </div>
+            <div class="stat-item stat-blue">
                 <div class="stat-number"><?php echo $total_sent; ?></div>
                 <div class="stat-label">Emails Enviados</div>
             </div>
@@ -465,21 +504,19 @@ include __DIR__ . '/../vision/includes/sidebar.php';
     <!-- Próxima Palestra -->
     <?php if ($next_lecture): ?>
     <div class="video-card glass-card">
-        <h3><i class="fas fa-calendar-alt"></i> Próxima Palestra Agendada</h3>
+        <h3 class="section-title"><i class="fas fa-calendar-alt"></i> Próxima Palestra Agendada</h3>
         <div class="next-lecture-info">
             <div class="lecture-details">
                 <h4><?php echo htmlspecialchars($next_lecture['title']); ?></h4>
                 <p><i class="fas fa-user"></i> <?php echo htmlspecialchars($next_lecture['speaker']); ?></p>
-                <?php if (isset($next_lecture['announcement_date'])): ?>
                 <p><i class="fas fa-calendar"></i> <?php echo date('d/m/Y', strtotime($next_lecture['announcement_date'])); ?>
                     <?php if (isset($next_lecture['lecture_time'])): ?>
                     às <?php echo date('H:i', strtotime($next_lecture['lecture_time'])); ?>h
                     <?php endif; ?>
                 </p>
-                <?php endif; ?>
             </div>
             <button type="button" class="cta-btn" onclick="useNextLectureTemplate()">
-                <i class="fas fa-envelope"></i> Criar Email sobre esta Palestra
+                <i class="fas fa-envelope"></i> Criar Email
             </button>
         </div>
     </div>
@@ -487,45 +524,43 @@ include __DIR__ . '/../vision/includes/sidebar.php';
     
     <!-- Formulário de Envio -->
     <div class="video-card glass-card">
-        <h3><i class="fas fa-edit"></i> Enviar Novo E-mail</h3>
+        <h3 class="section-title"><i class="fas fa-edit"></i> Enviar Novo E-mail</h3>
         
         <form method="POST" class="admin-form" id="emailForm">
             <input type="hidden" name="action" value="send_email">
             
-            <!-- Tipo de Destinatário -->
-            <div class="form-group">
-                <label><i class="fas fa-users"></i> Tipo de Destinatários</label>
-                <select name="recipient_type" id="recipient_type" class="form-control" onchange="toggleUserSelection()">
-                    <option value="all">Todos os Usuários (<?php echo $total_users; ?>)</option>
-                    <option value="subscribers">Apenas Assinantes (<?php echo $total_subscribers; ?>)</option>
-                    <option value="non_subscribers">Não Assinantes (<?php echo $total_users - $total_subscribers; ?>)</option>
-                    <option value="selected">Selecionar Usuários da Lista</option>
-                    <option value="custom">Apenas Emails Personalizados</option>
-                </select>
-            </div>
-            
-            <!-- Emails Personalizados (sempre visível) -->
-            <div class="form-group">
-                <label><i class="fas fa-at"></i> Emails Adicionais / Personalizados</label>
-                <textarea name="custom_emails" id="custom_emails" class="form-control" rows="3" placeholder="Digite emails separados por vírgula, espaço ou quebra de linha.&#10;Ex: email1@dominio.com, email2@dominio.com&#10;Estes emails serão adicionados aos destinatários selecionados acima."></textarea>
-                <small style="color: rgba(255,255,255,0.6); display: block; margin-top: 5px;">
-                    <i class="fas fa-info-circle"></i> Use este campo para enviar para pessoas que não estão cadastradas no sistema
-                </small>
+            <!-- Destinatários e Emails Personalizados - 2 colunas -->
+            <div class="two-column-grid">
+                <div class="form-group">
+                    <label><i class="fas fa-users"></i> Tipo de Destinatários</label>
+                    <select name="recipient_type" id="recipient_type" class="form-control" onchange="toggleUserSelection()">
+                        <option value="all">Todos os Usuários (<?php echo $total_users; ?>)</option>
+                        <option value="subscribers">Apenas Assinantes (<?php echo $total_subscribers; ?>)</option>
+                        <option value="non_subscribers">Não Assinantes (<?php echo $total_users - $total_subscribers; ?>)</option>
+                        <option value="with_password">Com Senha Registrada (<?php echo $users_with_password; ?>)</option>
+                        <option value="without_password">Sem Senha Registrada (<?php echo $users_without_password; ?>)</option>
+                        <option value="selected">Selecionar da Lista</option>
+                        <option value="custom">Apenas Emails Personalizados</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label><i class="fas fa-at"></i> Emails Adicionais</label>
+                    <textarea name="custom_emails" id="custom_emails" class="form-control" rows="2" placeholder="email1@dominio.com, email2@dominio.com"></textarea>
+                </div>
             </div>
             
             <!-- Seleção Individual de Usuários -->
             <div id="userSelectionContainer" style="display: none;">
-                <div class="form-group">
-                    <label><i class="fas fa-search"></i> Buscar Usuário</label>
-                    <input type="text" id="userSearch" class="form-control" placeholder="Digite o nome ou email para buscar...">
-                </div>
-                
-                <!-- Filtros Adicionais -->
-                <div class="filters-row">
-                    <div class="filter-group">
-                        <label><i class="fas fa-filter"></i> Filtrar por tipo:</label>
+                <div class="two-column-grid">
+                    <div class="form-group">
+                        <label><i class="fas fa-search"></i> Buscar Usuário</label>
+                        <input type="text" id="userSearch" class="form-control" placeholder="Nome ou email...">
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-filter"></i> Filtrar por Tipo</label>
                         <select id="filterUserType" class="form-control" onchange="filterUsers()">
-                            <option value="">Todos os tipos</option>
+                            <option value="">Todos</option>
                             <option value="admin">Admins</option>
                             <option value="assinante">Assinantes</option>
                             <option value="free">Free</option>
@@ -535,23 +570,15 @@ include __DIR__ . '/../vision/includes/sidebar.php';
                 
                 <div class="selection-controls">
                     <button type="button" class="btn-secondary" onclick="selectAllUsers()">
-                        <i class="fas fa-check-square"></i> Selecionar Todos Visíveis
+                        <i class="fas fa-check-square"></i> Selecionar Visíveis
                     </button>
                     <button type="button" class="btn-secondary" onclick="deselectAllUsers()">
-                        <i class="fas fa-square"></i> Desmarcar Todos
+                        <i class="fas fa-square"></i> Desmarcar
                     </button>
-                    <span class="selected-count">
-                        <span id="selectedCount">0</span> usuário(s) selecionado(s)
-                    </span>
+                    <span class="selected-count"><span id="selectedCount">0</span> selecionado(s)</span>
                 </div>
                 
                 <div class="users-list" id="usersList">
-                    <?php if (empty($all_users)): ?>
-                    <div style="padding: 20px; text-align: center; color: rgba(255,255,255,0.6);">
-                        <i class="fas fa-exclamation-triangle" style="font-size: 2rem; margin-bottom: 10px; display: block;"></i>
-                        Nenhum usuário encontrado no banco de dados.
-                    </div>
-                    <?php else: ?>
                     <?php foreach ($all_users as $user): ?>
                     <div class="user-item" 
                          data-name="<?php echo strtolower(htmlspecialchars($user['name'])); ?>" 
@@ -564,74 +591,71 @@ include __DIR__ . '/../vision/includes/sidebar.php';
                                 <span class="user-email"><?php echo htmlspecialchars($user['email']); ?></span>
                             </div>
                             <span class="user-type-badge <?php echo strtolower($user['user_type']); ?>"><?php echo $user['user_type']; ?></span>
+                            <?php if ($user['has_password']): ?>
+                            <span class="password-badge has-password" title="Tem senha"><i class="fas fa-key"></i></span>
+                            <?php else: ?>
+                            <span class="password-badge no-password" title="Sem senha"><i class="fas fa-key"></i></span>
+                            <?php endif; ?>
                         </label>
                     </div>
                     <?php endforeach; ?>
-                    <?php endif; ?>
                 </div>
             </div>
             
-            <!-- Configurações de Envio em Lote -->
-            <div class="form-group">
-                <label><i class="fas fa-layer-group"></i> Tamanho do Lote</label>
-                <select name="batch_size" id="batch_size" class="form-control">
-                    <option value="25">25 emails por lote (mais seguro)</option>
-                    <option value="50" selected>50 emails por lote (recomendado)</option>
-                    <option value="100">100 emails por lote (mais rápido)</option>
-                </select>
-                <small style="color: rgba(255,255,255,0.6); display: block; margin-top: 5px;">
-                    <i class="fas fa-info-circle"></i> Para mais de 100 destinatários, os emails são enviados em lotes com intervalo de 2 segundos entre eles
-                </small>
+            <!-- Lote e Palestra - 2 colunas -->
+            <div class="two-column-grid">
+                <div class="form-group">
+                    <label><i class="fas fa-layer-group"></i> Tamanho do Lote</label>
+                    <select name="batch_size" class="form-control">
+                        <option value="25">25 emails/lote (seguro)</option>
+                        <option value="50" selected>50 emails/lote (recomendado)</option>
+                        <option value="100">100 emails/lote (rápido)</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label><i class="fas fa-chalkboard-teacher"></i> Palestra Agendada</label>
+                    <select name="lecture_id" id="lecture_id" class="form-control" onchange="fillLectureTemplate()">
+                        <option value="">Selecione para preencher template...</option>
+                        <?php foreach ($all_lectures as $lecture): ?>
+                        <option value="<?php echo $lecture['id']; ?>"
+                                data-title="<?php echo htmlspecialchars($lecture['title'], ENT_QUOTES); ?>"
+                                data-speaker="<?php echo htmlspecialchars($lecture['speaker'], ENT_QUOTES); ?>"
+                                data-date="<?php echo date('d/m/Y', strtotime($lecture['announcement_date'])); ?>"
+                                data-time="<?php echo date('H:i', strtotime($lecture['lecture_time'])); ?>"
+                                data-description="<?php echo htmlspecialchars($lecture['description'] ?? '', ENT_QUOTES); ?>">
+                            <?php echo date('d/m/Y', strtotime($lecture['announcement_date'])); ?> - <?php echo htmlspecialchars($lecture['title']); ?>
+                        </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
             </div>
             
-            <!-- Palestra Relacionada (Palestras Agendadas) -->
-            <div class="form-group">
-                <label><i class="fas fa-chalkboard-teacher"></i> Palestra Agendada (opcional)</label>
-                <select name="lecture_id" id="lecture_id" class="form-control" onchange="fillLectureTemplate()">
-                    <option value="">Selecione uma palestra para preencher o template...</option>
-                    <?php foreach ($all_lectures as $lecture): ?>
-                    <option value="<?php echo $lecture['id']; ?>"
-                            data-title="<?php echo htmlspecialchars($lecture['title'], ENT_QUOTES); ?>"
-                            data-speaker="<?php echo htmlspecialchars($lecture['speaker'], ENT_QUOTES); ?>"
-                            data-date="<?php echo date('d/m/Y', strtotime($lecture['announcement_date'])); ?>"
-                            data-time="<?php echo date('H:i', strtotime($lecture['lecture_time'])); ?>"
-                            data-description="<?php echo htmlspecialchars($lecture['description'] ?? '', ENT_QUOTES); ?>">
-                        <?php echo date('d/m/Y', strtotime($lecture['announcement_date'])); ?> - 
-                        <?php echo htmlspecialchars($lecture['title']); ?> 
-                        (<?php echo htmlspecialchars($lecture['speaker']); ?>)
-                    </option>
-                    <?php endforeach; ?>
-                </select>
-                <small style="color: rgba(255,255,255,0.6); display: block; margin-top: 5px;">
-                    <i class="fas fa-magic"></i> Ao selecionar uma palestra, o template será preenchido automaticamente
-                </small>
-            </div>
-            
-            <!-- Assunto -->
-            <div class="form-group">
-                <label><i class="fas fa-heading"></i> Assunto</label>
-                <input type="text" name="subject" id="subject" class="form-control" placeholder="Assunto do e-mail" required>
-            </div>
-            
-            <!-- Link de Acesso -->
-            <div class="form-group">
-                <label><i class="fas fa-link"></i> Link de Acesso (opcional)</label>
-                <input type="url" name="access_link" id="access_link" class="form-control" placeholder="https://...">
-                <small style="color: rgba(255,255,255,0.6); display: block; margin-top: 5px;">Use [LINK] no corpo do email para inserir este link</small>
+            <!-- Assunto e Link - 2 colunas -->
+            <div class="two-column-grid">
+                <div class="form-group">
+                    <label><i class="fas fa-heading"></i> Assunto</label>
+                    <input type="text" name="subject" id="subject" class="form-control" placeholder="Assunto do e-mail" required>
+                </div>
+                
+                <div class="form-group">
+                    <label><i class="fas fa-link"></i> Link de Acesso</label>
+                    <input type="url" name="access_link" id="access_link" class="form-control" placeholder="https://... (use [LINK] na mensagem)">
+                </div>
             </div>
             
             <!-- Mensagem -->
             <div class="form-group">
                 <label><i class="fas fa-align-left"></i> Mensagem</label>
-                <textarea name="message" id="message" class="form-control" rows="12" placeholder="Digite sua mensagem aqui...
-
-Use [NOME] para personalizar com o nome do destinatário.
-Use [LINK] para inserir o link de acesso." required></textarea>
+                <textarea name="message" id="message" class="form-control" rows="10" placeholder="Use [NOME] para nome e [LINK] para o link" required></textarea>
             </div>
             
             <div style="text-align: center; margin-top: 20px;">
-                <button type="submit" class="cta-btn" style="padding: 15px 40px; font-size: 1.1rem;" <?php echo !$email_configured ? 'disabled title="Configure o email primeiro"' : ''; ?>>
+                <button type="submit" class="cta-btn" <?php echo !$email_configured ? 'disabled' : ''; ?>>
                     <i class="fas fa-paper-plane"></i> Enviar E-mails
+                </button>
+                <button type="button" class="cta-btn btn-secondary-large" onclick="openSaveTemplateModal()">
+                    <i class="fas fa-save"></i> Salvar como Template
                 </button>
             </div>
         </form>
@@ -639,64 +663,53 @@ Use [LINK] para inserir o link de acesso." required></textarea>
     
     <!-- Templates Rápidos -->
     <div class="video-card glass-card">
-        <h3><i class="fas fa-magic"></i> Templates Rápidos</h3>
+        <h3 class="section-title">
+            <i class="fas fa-magic"></i> Templates
+            <button type="button" class="btn-edit-templates" onclick="openManageTemplatesModal()">
+                <i class="fas fa-cog"></i> Gerenciar
+            </button>
+        </h3>
         
         <div class="quick-actions-grid">
             <div class="quick-action-card" onclick="useTemplate('welcome')">
-                <div class="quick-action-icon" style="color: #3b82f6;">
-                    <i class="fas fa-hand-wave"></i>
-                </div>
+                <div class="quick-action-icon" style="color: #3b82f6;"><i class="fas fa-hand-wave"></i></div>
                 <h4>Boas-vindas</h4>
-                <p>Novos usuários</p>
             </div>
-            
             <div class="quick-action-card" onclick="useTemplate('newsletter')">
-                <div class="quick-action-icon" style="color: #8b5cf6;">
-                    <i class="fas fa-newspaper"></i>
-                </div>
+                <div class="quick-action-icon" style="color: #8b5cf6;"><i class="fas fa-newspaper"></i></div>
                 <h4>Newsletter</h4>
-                <p>Novidades da semana</p>
             </div>
-            
             <div class="quick-action-card" onclick="useTemplate('promotion')">
-                <div class="quick-action-icon" style="color: #10b981;">
-                    <i class="fas fa-percentage"></i>
-                </div>
+                <div class="quick-action-icon" style="color: #10b981;"><i class="fas fa-percentage"></i></div>
                 <h4>Promoção</h4>
-                <p>Ofertas especiais</p>
             </div>
-            
             <div class="quick-action-card" onclick="useTemplate('reminder')">
-                <div class="quick-action-icon" style="color: #ef4444;">
-                    <i class="fas fa-bell"></i>
-                </div>
+                <div class="quick-action-icon" style="color: #ef4444;"><i class="fas fa-bell"></i></div>
                 <h4>Lembrete</h4>
-                <p>Informações importantes</p>
             </div>
-            
             <div class="quick-action-card" onclick="useTemplate('lecture')">
-                <div class="quick-action-icon" style="color: #f59e0b;">
-                    <i class="fas fa-video"></i>
-                </div>
-                <h4>Nova Palestra</h4>
-                <p>Anúncio de palestra</p>
+                <div class="quick-action-icon" style="color: #f59e0b;"><i class="fas fa-video"></i></div>
+                <h4>Palestra</h4>
+            </div>
+            <div class="quick-action-card" onclick="useTemplate('password_reminder')">
+                <div class="quick-action-icon" style="color: #ec4899;"><i class="fas fa-key"></i></div>
+                <h4>Senha</h4>
             </div>
             
-            <div class="quick-action-card" onclick="useTemplate('certificate')">
-                <div class="quick-action-icon" style="color: #ec4899;">
-                    <i class="fas fa-certificate"></i>
-                </div>
-                <h4>Certificado</h4>
-                <p>Certificado disponível</p>
+            <!-- Templates salvos -->
+            <?php foreach ($saved_templates as $name => $template): ?>
+            <div class="quick-action-card saved-template" onclick="useSavedTemplate('<?php echo htmlspecialchars($name, ENT_QUOTES); ?>')">
+                <div class="quick-action-icon" style="color: #06b6d4;"><i class="fas fa-bookmark"></i></div>
+                <h4><?php echo htmlspecialchars($name); ?></h4>
             </div>
+            <?php endforeach; ?>
         </div>
     </div>
     
-    <!-- Histórico de Emails -->
+    <!-- Histórico -->
     <?php if (!empty($recent_emails)): ?>
     <div class="video-card glass-card">
-        <h3><i class="fas fa-history"></i> Últimos E-mails Enviados</h3>
-        
+        <h3 class="section-title"><i class="fas fa-history"></i> Últimos E-mails</h3>
         <div class="table-container">
             <table class="certificates-table">
                 <thead>
@@ -711,15 +724,13 @@ Use [LINK] para inserir o link de acesso." required></textarea>
                     <?php foreach ($recent_emails as $email): ?>
                     <tr>
                         <td><?php echo date('d/m/Y H:i', strtotime($email['created_at'])); ?></td>
-                        <td><?php echo htmlspecialchars(substr($email['subject'], 0, 50)); ?><?php echo strlen($email['subject']) > 50 ? '...' : ''; ?></td>
-                        <td><?php echo $email['recipient_count']; ?> (<?php echo $email['recipient_type']; ?>)</td>
+                        <td><?php echo htmlspecialchars(substr($email['subject'], 0, 40)); ?><?php echo strlen($email['subject']) > 40 ? '...' : ''; ?></td>
+                        <td><?php echo $email['recipient_count']; ?></td>
                         <td>
                             <?php if ($email['status'] === 'sent'): ?>
-                            <span style="color: #10b981;"><i class="fas fa-check"></i> Enviado</span>
-                            <?php elseif ($email['status'] === 'failed'): ?>
-                            <span style="color: #ef4444;"><i class="fas fa-times"></i> Falhou</span>
+                            <span class="status-sent"><i class="fas fa-check"></i></span>
                             <?php else: ?>
-                            <span style="color: #f59e0b;"><i class="fas fa-clock"></i> <?php echo $email['status']; ?></span>
+                            <span class="status-failed"><i class="fas fa-times"></i></span>
                             <?php endif; ?>
                         </td>
                     </tr>
@@ -731,18 +742,82 @@ Use [LINK] para inserir o link de acesso." required></textarea>
     <?php endif; ?>
 </div>
 
+<!-- Modal Salvar Template -->
+<div id="saveTemplateModal" class="modal">
+    <div class="modal-content glass-modal">
+        <span class="close" onclick="closeSaveTemplateModal()">&times;</span>
+        <h3><i class="fas fa-save"></i> Salvar Template</h3>
+        <form method="POST">
+            <input type="hidden" name="action" value="save_template">
+            <div class="form-group">
+                <label>Nome do Template</label>
+                <input type="text" name="template_name" class="form-control" placeholder="Ex: Lembrete Palestra" required>
+            </div>
+            <div class="form-group">
+                <label>Assunto</label>
+                <input type="text" name="template_subject" id="save_template_subject" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label>Mensagem</label>
+                <textarea name="template_message" id="save_template_message" class="form-control" rows="8" required></textarea>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn-secondary" onclick="closeSaveTemplateModal()">Cancelar</button>
+                <button type="submit" class="cta-btn">Salvar Template</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal Gerenciar Templates -->
+<div id="manageTemplatesModal" class="modal">
+    <div class="modal-content glass-modal">
+        <span class="close" onclick="closeManageTemplatesModal()">&times;</span>
+        <h3><i class="fas fa-cog"></i> Gerenciar Templates Salvos</h3>
+        
+        <?php if (empty($saved_templates)): ?>
+        <p style="text-align: center; color: rgba(255,255,255,0.6); padding: 20px;">
+            Nenhum template salvo ainda.
+        </p>
+        <?php else: ?>
+        <div class="templates-list">
+            <?php foreach ($saved_templates as $name => $template): ?>
+            <div class="template-item">
+                <div class="template-info">
+                    <strong><?php echo htmlspecialchars($name); ?></strong>
+                    <span><?php echo htmlspecialchars(substr($template['subject'], 0, 50)); ?></span>
+                </div>
+                <div class="template-actions">
+                    <button type="button" class="btn-icon" onclick="editTemplate('<?php echo htmlspecialchars($name, ENT_QUOTES); ?>')" title="Editar">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <form method="POST" style="display: inline;" onsubmit="return confirm('Excluir este template?')">
+                        <input type="hidden" name="action" value="delete_template">
+                        <input type="hidden" name="template_name" value="<?php echo htmlspecialchars($name); ?>">
+                        <button type="submit" class="btn-icon btn-danger" title="Excluir">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </form>
+                </div>
+            </div>
+            <?php endforeach; ?>
+        </div>
+        <?php endif; ?>
+        
+        <div class="modal-actions">
+            <button type="button" class="btn-secondary" onclick="closeManageTemplatesModal()">Fechar</button>
+        </div>
+    </div>
+</div>
+
 <script>
-// Templates de email
-const templates = {
+// Templates padrão
+const defaultTemplates = {
     welcome: {
         subject: 'Bem-vindo(a) à Translators101!',
         message: `Olá [NOME],
 
-Seja bem-vindo(a) à nossa plataforma educacional para profissionais de tradução!
-
-Aqui você encontrará palestras exclusivas, glossários especializados e muito conteúdo para aprimorar suas habilidades profissionais.
-
-Comece explorando nossa videoteca e não perca nenhuma novidade!
+Seja bem-vindo(a) à nossa plataforma!
 
 Equipe Translators101`
     },
@@ -750,13 +825,7 @@ Equipe Translators101`
         subject: 'Translators101 - Novidades da Semana',
         message: `Olá [NOME],
 
-Confira as principais novidades desta semana:
-
-• Nova palestra adicionada
-• Glossário atualizado
-• Certificados disponíveis para download
-
-Acesse nossa plataforma e aproveite todo o conteúdo!
+Confira as novidades desta semana!
 
 Equipe Translators101`
     },
@@ -766,10 +835,6 @@ Equipe Translators101`
 
 Temos uma oferta especial para você!
 
-[Detalhes da promoção]
-
-Esta oferta é válida por tempo limitado. Não perca!
-
 Acesse: [LINK]
 
 Equipe Translators101`
@@ -778,77 +843,79 @@ Equipe Translators101`
         subject: 'Lembrete Importante - Translators101',
         message: `Olá [NOME],
 
-Este é um lembrete importante sobre:
-
-[Conteúdo do lembrete]
-
-Para mais informações, acesse nossa plataforma.
+Este é um lembrete importante.
 
 Equipe Translators101`
     },
     lecture: {
-        subject: '🎬 Nova Palestra Disponível - Translators101',
+        subject: '🎬 Nova Palestra - Translators101',
         message: `Olá [NOME],
 
-Uma nova palestra foi adicionada à plataforma!
-
-📚 [Título da Palestra]
-👤 Palestrante: [Nome do Palestrante]
-⏱️ Duração: [XX] minutos
-
-Não perca a oportunidade de aprender com os melhores profissionais do mercado.
-
-Acesse agora: [LINK]
+Temos uma nova palestra para você!
 
 Equipe Translators101`
     },
-    certificate: {
-        subject: '🎓 Seu Certificado está Disponível - Translators101',
+    password_reminder: {
+        subject: '🔑 Registre sua Senha - Translators101',
         message: `Olá [NOME],
 
-Parabéns! Seu certificado de participação está disponível para download.
+Notamos que você ainda não registrou sua senha no nosso novo site.
 
-Acesse sua área de certificados para baixar:
-[LINK]
+Para acessar todo o conteúdo da plataforma, registre sua senha em: translators101.com
 
-Continue participando das nossas palestras e amplie seu portfólio de certificados!
+Se tiver dificuldades, entre em contato pelo WhatsApp (+55 19 98260 0771).
 
-Equipe Translators101`
+Um abraço.
+
+William Cassemiro`
     }
 };
 
-// Dados da próxima palestra (se existir)
+// Templates salvos (do PHP)
+const savedTemplates = <?php echo json_encode($saved_templates); ?>;
+
+// Próxima palestra
 <?php if ($next_lecture): ?>
 const nextLecture = {
     title: <?php echo json_encode($next_lecture['title']); ?>,
     speaker: <?php echo json_encode($next_lecture['speaker']); ?>,
-    date: <?php echo isset($next_lecture['announcement_date']) ? json_encode(date('d/m/Y', strtotime($next_lecture['announcement_date']))) : '""'; ?>,
-    time: <?php echo isset($next_lecture['lecture_time']) ? json_encode(date('H:i', strtotime($next_lecture['lecture_time']))) : '""'; ?>
+    date: <?php echo json_encode(date('d/m/Y', strtotime($next_lecture['announcement_date']))); ?>,
+    time: <?php echo json_encode(date('H:i', strtotime($next_lecture['lecture_time']))); ?>
 };
 <?php else: ?>
 const nextLecture = null;
 <?php endif; ?>
 
-// Função para preencher template ao selecionar palestra
+function useTemplate(type) {
+    if (defaultTemplates[type]) {
+        document.getElementById('subject').value = defaultTemplates[type].subject;
+        document.getElementById('message').value = defaultTemplates[type].message;
+        document.getElementById('emailForm').scrollIntoView({ behavior: 'smooth' });
+    }
+}
+
+function useSavedTemplate(name) {
+    if (savedTemplates[name]) {
+        document.getElementById('subject').value = savedTemplates[name].subject;
+        document.getElementById('message').value = savedTemplates[name].message;
+        document.getElementById('emailForm').scrollIntoView({ behavior: 'smooth' });
+    }
+}
+
 function fillLectureTemplate() {
     const select = document.getElementById('lecture_id');
-    const selectedOption = select.options[select.selectedIndex];
+    const opt = select.options[select.selectedIndex];
     
-    if (!selectedOption.value) {
-        return; // Nenhuma palestra selecionada
-    }
+    if (!opt.value) return;
     
-    const title = selectedOption.dataset.title || '';
-    const speaker = selectedOption.dataset.speaker || '';
-    const date = selectedOption.dataset.date || '';
-    const time = selectedOption.dataset.time || '';
-    const description = selectedOption.dataset.description || '';
+    const title = opt.dataset.title || '';
+    const speaker = opt.dataset.speaker || '';
+    const date = opt.dataset.date || '';
+    const time = opt.dataset.time || '';
+    const description = opt.dataset.description || '';
     
-    // Preencher assunto
     document.getElementById('subject').value = `🎬 ${title} - Hoje às ${time}h`;
-    
-    // Preencher mensagem com o template
-    const message = `Olá!
+    document.getElementById('message').value = `Olá!
 
 Hoje, ${date}, às ${time}h, teremos a palestra "${title}", com ${speaker}.
 
@@ -865,36 +932,18 @@ Um abraço.
 
 William Cassemiro`;
     
-    document.getElementById('message').value = message;
-    
-    // Scroll para o formulário
     document.getElementById('emailForm').scrollIntoView({ behavior: 'smooth' });
-}
-
-function useTemplate(type) {
-    if (templates[type]) {
-        document.getElementById('subject').value = templates[type].subject;
-        document.getElementById('message').value = templates[type].message;
-        document.getElementById('access_link').value = '';
-        document.getElementById('lecture_id').value = '';
-        
-        // Scroll para o formulário
-        document.getElementById('emailForm').scrollIntoView({ behavior: 'smooth' });
-    }
 }
 
 function useNextLectureTemplate() {
     if (nextLecture) {
-        // Preencher assunto
         document.getElementById('subject').value = `🎬 ${nextLecture.title} - Hoje às ${nextLecture.time}h`;
-        
-        // Preencher mensagem com o template
-        const message = `Olá!
+        document.getElementById('message').value = `Olá!
 
 Hoje, ${nextLecture.date}, às ${nextLecture.time}h, teremos a palestra "${nextLecture.title}", com ${nextLecture.speaker}.
 
 Descrição da palestra:
-[Adicione a descrição da palestra aqui]
+[Adicione a descrição aqui]
 
 A transmissão será no novo site da Translators101: translators101.com.
 
@@ -906,31 +955,22 @@ Um abraço.
 
 William Cassemiro`;
         
-        document.getElementById('message').value = message;
-        
-        // Scroll para o formulário
         document.getElementById('emailForm').scrollIntoView({ behavior: 'smooth' });
     }
 }
 
-// Controle de seleção de usuários
 function toggleUserSelection() {
-    const recipientType = document.getElementById('recipient_type').value;
+    const type = document.getElementById('recipient_type').value;
     const container = document.getElementById('userSelectionContainer');
-    
-    if (recipientType === 'selected') {
-        container.style.display = 'block';
-    } else {
-        container.style.display = 'none';
-        // Desmarcar todos quando mudar para outro tipo
+    container.style.display = (type === 'selected') ? 'block' : 'none';
+    if (type !== 'selected') {
         document.querySelectorAll('.user-checkbox').forEach(cb => cb.checked = false);
         updateSelectedCount();
     }
 }
 
 function selectAllUsers() {
-    const visibleItems = document.querySelectorAll('.user-item:not([style*="display: none"]) .user-checkbox');
-    visibleItems.forEach(cb => cb.checked = true);
+    document.querySelectorAll('.user-item:not([style*="display: none"]) .user-checkbox').forEach(cb => cb.checked = true);
     updateSelectedCount();
 }
 
@@ -940,110 +980,241 @@ function deselectAllUsers() {
 }
 
 function updateSelectedCount() {
-    const count = document.querySelectorAll('.user-checkbox:checked').length;
-    document.getElementById('selectedCount').textContent = count;
+    document.getElementById('selectedCount').textContent = document.querySelectorAll('.user-checkbox:checked').length;
 }
 
-// Filtrar usuários por tipo
 function filterUsers() {
-    const searchTerm = (document.getElementById('userSearch')?.value || '').toLowerCase().trim();
-    const typeFilter = (document.getElementById('filterUserType')?.value || '').toLowerCase();
+    const search = (document.getElementById('userSearch')?.value || '').toLowerCase();
+    const type = (document.getElementById('filterUserType')?.value || '').toLowerCase();
     
-    const items = document.querySelectorAll('.user-item');
-    
-    items.forEach(item => {
+    document.querySelectorAll('.user-item').forEach(item => {
         const name = item.dataset.name || '';
         const email = item.dataset.email || '';
         const userType = item.dataset.type || '';
         
-        const matchesSearch = searchTerm === '' || name.includes(searchTerm) || email.includes(searchTerm);
-        const matchesType = typeFilter === '' || userType === typeFilter;
+        const matchSearch = !search || name.includes(search) || email.includes(search);
+        const matchType = !type || userType === type;
         
-        if (matchesSearch && matchesType) {
-            item.style.display = 'block';
-        } else {
-            item.style.display = 'none';
-        }
+        item.style.display = (matchSearch && matchType) ? 'block' : 'none';
     });
 }
 
-// Busca de usuários
 document.getElementById('userSearch')?.addEventListener('input', filterUsers);
 
-// Validação do formulário
+// Modais
+function openSaveTemplateModal() {
+    document.getElementById('save_template_subject').value = document.getElementById('subject').value;
+    document.getElementById('save_template_message').value = document.getElementById('message').value;
+    document.getElementById('saveTemplateModal').style.display = 'flex';
+}
+
+function closeSaveTemplateModal() {
+    document.getElementById('saveTemplateModal').style.display = 'none';
+}
+
+function openManageTemplatesModal() {
+    document.getElementById('manageTemplatesModal').style.display = 'flex';
+}
+
+function closeManageTemplatesModal() {
+    document.getElementById('manageTemplatesModal').style.display = 'none';
+}
+
+function editTemplate(name) {
+    if (savedTemplates[name]) {
+        document.getElementById('subject').value = savedTemplates[name].subject;
+        document.getElementById('message').value = savedTemplates[name].message;
+        closeManageTemplatesModal();
+        openSaveTemplateModal();
+        document.querySelector('#saveTemplateModal input[name="template_name"]').value = name;
+    }
+}
+
+// Validação
 document.getElementById('emailForm')?.addEventListener('submit', function(e) {
-    const recipientType = document.getElementById('recipient_type').value;
-    const customEmails = document.getElementById('custom_emails').value.trim();
+    const type = document.getElementById('recipient_type').value;
+    const custom = document.getElementById('custom_emails').value.trim();
     
-    if (recipientType === 'selected') {
-        const selectedCount = document.querySelectorAll('.user-checkbox:checked').length;
-        if (selectedCount === 0 && !customEmails) {
+    if (type === 'selected') {
+        const count = document.querySelectorAll('.user-checkbox:checked').length;
+        if (count === 0 && !custom) {
             e.preventDefault();
-            alert('Por favor, selecione pelo menos um usuário ou adicione emails personalizados.');
+            alert('Selecione pelo menos um usuário ou adicione emails.');
             return false;
         }
-        
-        const totalCount = selectedCount + (customEmails ? customEmails.split(/[\s,;]+/).filter(e => e.includes('@')).length : 0);
-        if (!confirm(`Enviar email para ${totalCount} destinatário(s)?`)) {
-            e.preventDefault();
-            return false;
-        }
-    } else if (recipientType === 'custom') {
-        if (!customEmails) {
-            e.preventDefault();
-            alert('Por favor, adicione pelo menos um email no campo de emails personalizados.');
-            return false;
-        }
-        const emailCount = customEmails.split(/[\s,;]+/).filter(e => e.includes('@')).length;
-        if (!confirm(`Enviar email para ${emailCount} email(s) personalizado(s)?`)) {
-            e.preventDefault();
-            return false;
-        }
-    } else {
-        const recipientText = document.querySelector(`#recipient_type option[value="${recipientType}"]`).textContent;
-        if (!confirm(`Enviar email para: ${recipientText}?`)) {
-            e.preventDefault();
-            return false;
-        }
+    } else if (type === 'custom' && !custom) {
+        e.preventDefault();
+        alert('Adicione pelo menos um email.');
+        return false;
+    }
+    
+    const recipientText = document.querySelector(`#recipient_type option[value="${type}"]`)?.textContent || type;
+    if (!confirm(`Enviar email para: ${recipientText}?`)) {
+        e.preventDefault();
+        return false;
     }
 });
+
+// Fechar modal ao clicar fora
+window.onclick = function(e) {
+    if (e.target.classList.contains('modal')) {
+        e.target.style.display = 'none';
+    }
+};
 </script>
 
 <style>
-/* Estatísticas */
-.stats-grid {
+/* Títulos das seções com gap */
+.section-title {
+    margin: 0 0 15px 0;
+    padding-left: 20px;
+    color: #c084fc;
+    font-size: 1.1rem;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.section-title i {
+    color: #c084fc;
+}
+
+/* Grid de 3 colunas */
+.three-column-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    grid-template-columns: repeat(3, 1fr);
     gap: 20px;
-    margin-top: 20px;
+    margin-bottom: 20px;
+}
+
+/* Grid de 2 colunas */
+.two-column-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 20px;
+    margin-bottom: 15px;
+}
+
+/* Cards compactos */
+.video-card.glass-card {
+    padding: 20px;
+}
+
+/* Status SMTP mini */
+.config-status-mini {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 15px;
+    border-radius: 8px;
+    font-weight: 600;
+}
+
+.config-status-mini.configured {
+    background: rgba(16, 185, 129, 0.15);
+    color: #10b981;
+}
+
+.config-status-mini.not-configured {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+}
+
+.smtp-info {
+    margin: 10px 0 0 0;
+    font-size: 0.85rem;
+    color: rgba(255,255,255,0.6);
+    padding-left: 20px;
+}
+
+/* Teste form */
+.test-form {
+    display: flex;
+    gap: 10px;
+}
+
+.test-form .form-control {
+    flex: 1;
+    padding: 10px 12px;
+}
+
+.btn-small {
+    padding: 10px 15px !important;
+    font-size: 0.9rem !important;
+}
+
+/* Sender info */
+.sender-info {
+    margin: 0;
+    font-weight: 600;
+    color: white;
+    padding-left: 20px;
+}
+
+.sender-email {
+    margin: 5px 0 0 0;
+    font-size: 0.85rem;
+    color: rgba(255,255,255,0.6);
+    padding-left: 20px;
+}
+
+/* Estatísticas em linhas */
+.stats-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 15px;
+    margin-bottom: 15px;
+}
+
+.stats-row:last-child {
+    margin-bottom: 0;
 }
 
 .stat-item {
     text-align: center;
-    padding: 25px 20px;
+    padding: 20px 15px;
     background: rgba(142, 68, 173, 0.2);
-    border-radius: 15px;
+    border-radius: 12px;
     border: 1px solid rgba(142, 68, 173, 0.3);
-    transition: transform 0.2s ease;
-    backdrop-filter: blur(10px);
 }
 
-.stat-item:hover {
-    transform: translateY(-2px);
-    background: rgba(142, 68, 173, 0.3);
+.stat-item.stat-green {
+    background: rgba(16, 185, 129, 0.15);
+    border-color: rgba(16, 185, 129, 0.3);
+}
+
+.stat-item.stat-green .stat-number {
+    color: #10b981;
+}
+
+.stat-item.stat-red {
+    background: rgba(239, 68, 68, 0.15);
+    border-color: rgba(239, 68, 68, 0.3);
+}
+
+.stat-item.stat-red .stat-number {
+    color: #ef4444;
+}
+
+.stat-item.stat-blue {
+    background: rgba(59, 130, 246, 0.15);
+    border-color: rgba(59, 130, 246, 0.3);
+}
+
+.stat-item.stat-blue .stat-number {
+    color: #3b82f6;
 }
 
 .stat-number {
-    font-size: 2.8rem;
+    font-size: 2rem;
     font-weight: bold;
     color: #c084fc;
-    margin-bottom: 8px;
 }
 
 .stat-label {
-    font-size: 0.95rem;
-    color: rgba(255, 255, 255, 0.8);
-    font-weight: 500;
+    font-size: 0.85rem;
+    color: rgba(255, 255, 255, 0.7);
+    margin-top: 5px;
 }
 
 /* Próxima Palestra */
@@ -1051,177 +1222,113 @@ document.getElementById('emailForm')?.addEventListener('submit', function(e) {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    flex-wrap: wrap;
     gap: 20px;
-    margin-top: 15px;
-    padding: 20px;
+    padding: 15px 20px;
     background: rgba(245, 158, 11, 0.1);
     border: 1px solid rgba(245, 158, 11, 0.3);
-    border-radius: 12px;
+    border-radius: 10px;
 }
 
 .lecture-details h4 {
     color: #f59e0b;
-    margin: 0 0 10px 0;
-    font-size: 1.2rem;
+    margin: 0 0 8px 0;
+    font-size: 1.1rem;
 }
 
 .lecture-details p {
-    margin: 5px 0;
+    margin: 3px 0;
     color: rgba(255, 255, 255, 0.8);
+    font-size: 0.9rem;
 }
 
-.lecture-details i {
-    width: 20px;
-    color: #f59e0b;
-}
-
-/* Formulário */
+/* Form */
 .form-group {
-    margin-bottom: 20px;
+    margin-bottom: 0;
 }
 
 .form-group label {
     display: block;
-    margin-bottom: 8px;
+    margin-bottom: 6px;
     font-weight: 600;
     color: white;
+    font-size: 0.9rem;
 }
 
 .form-group label i {
-    margin-right: 8px;
+    margin-right: 6px;
     color: #c084fc;
 }
 
 .form-control {
     width: 100%;
-    padding: 12px 16px;
+    padding: 10px 14px;
     border: 1px solid rgba(255, 255, 255, 0.2);
-    border-radius: 10px;
-    font-size: 1rem;
+    border-radius: 8px;
+    font-size: 0.95rem;
     background: rgba(0, 0, 0, 0.3);
     color: white;
-    transition: all 0.3s ease;
 }
 
 .form-control:focus {
     outline: none;
     border-color: #c084fc;
-    box-shadow: 0 0 0 3px rgba(192, 132, 252, 0.1);
-    background: rgba(0, 0, 0, 0.5);
-}
-
-.form-control option {
-    background: #1a1a1a;
-    color: white;
+    box-shadow: 0 0 0 2px rgba(192, 132, 252, 0.1);
 }
 
 textarea.form-control {
     resize: vertical;
-    min-height: 200px;
-    font-family: inherit;
+    min-height: 150px;
 }
 
-/* Filtros */
-.filters-row {
-    display: flex;
-    gap: 20px;
-    margin-bottom: 15px;
-    flex-wrap: wrap;
-}
-
-.filter-group {
-    flex: 1;
-    min-width: 200px;
-}
-
-.filter-group label {
-    display: block;
-    margin-bottom: 5px;
-    font-size: 0.9rem;
-    color: rgba(255, 255, 255, 0.8);
-}
-
-.filter-group .form-control {
-    padding: 8px 12px;
-    font-size: 0.9rem;
-}
-
-/* Seleção de Usuários */
-#userSelectionContainer {
-    background: rgba(30, 30, 30, 0.6);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 12px;
-    padding: 20px;
-    margin-bottom: 20px;
-}
-
+/* Selection controls */
 .selection-controls {
     display: flex;
-    gap: 15px;
+    gap: 10px;
     align-items: center;
-    flex-wrap: wrap;
-    margin-bottom: 15px;
-    padding-bottom: 15px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    margin: 10px 0;
+    padding: 10px;
+    background: rgba(0,0,0,0.2);
+    border-radius: 8px;
 }
 
 .btn-secondary {
-    padding: 8px 16px;
+    padding: 6px 12px;
     background: rgba(255, 255, 255, 0.1);
     border: 1px solid rgba(255, 255, 255, 0.2);
-    border-radius: 8px;
+    border-radius: 6px;
     color: white;
     cursor: pointer;
-    transition: all 0.2s ease;
-    font-size: 0.9rem;
-}
-
-.btn-secondary:hover {
-    background: rgba(255, 255, 255, 0.2);
+    font-size: 0.85rem;
 }
 
 .selected-count {
     margin-left: auto;
     color: #c084fc;
     font-weight: 600;
+    font-size: 0.9rem;
 }
 
+/* Users list */
 .users-list {
-    max-height: 400px;
+    max-height: 300px;
     overflow-y: auto;
     border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 10px;
+    border-radius: 8px;
     background: rgba(0, 0, 0, 0.2);
+    margin-bottom: 15px;
 }
 
 .user-item {
     border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-    transition: background 0.2s ease;
-}
-
-.user-item:last-child {
-    border-bottom: none;
-}
-
-.user-item:hover {
-    background: rgba(192, 132, 252, 0.1);
 }
 
 .user-checkbox-label {
     display: flex;
     align-items: center;
-    gap: 15px;
-    padding: 12px 15px;
+    gap: 10px;
+    padding: 10px 12px;
     cursor: pointer;
     margin: 0;
-}
-
-.user-checkbox-label input[type="checkbox"] {
-    width: 18px;
-    height: 18px;
-    accent-color: #c084fc;
-    cursor: pointer;
 }
 
 .user-info {
@@ -1232,185 +1339,238 @@ textarea.form-control {
     display: block;
     color: white;
     font-weight: 500;
+    font-size: 0.9rem;
 }
 
 .user-email {
     display: block;
-    color: rgba(255, 255, 255, 0.6);
-    font-size: 0.85rem;
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 0.8rem;
 }
 
 .user-type-badge {
-    padding: 4px 10px;
-    border-radius: 12px;
-    font-size: 0.75rem;
+    padding: 3px 8px;
+    border-radius: 10px;
+    font-size: 0.7rem;
     font-weight: 600;
-    text-transform: uppercase;
 }
 
-.user-type-badge.admin {
+.user-type-badge.admin { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
+.user-type-badge.assinante { background: rgba(16, 185, 129, 0.2); color: #10b981; }
+.user-type-badge.free { background: rgba(156, 163, 175, 0.2); color: #9ca3af; }
+
+.password-badge {
+    font-size: 0.8rem;
+    padding: 3px;
+}
+
+.password-badge.has-password { color: #10b981; }
+.password-badge.no-password { color: #ef4444; opacity: 0.5; }
+
+/* Templates */
+.quick-actions-grid {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 10px;
+}
+
+.quick-action-card {
+    padding: 15px 10px;
+    text-align: center;
+    background: rgba(30, 30, 30, 0.6);
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.quick-action-card:hover {
+    transform: translateY(-2px);
+    border-color: rgba(192, 132, 252, 0.3);
+}
+
+.quick-action-icon {
+    font-size: 1.5rem;
+    margin-bottom: 8px;
+}
+
+.quick-action-card h4 {
+    margin: 0;
+    font-size: 0.8rem;
+    color: white;
+}
+
+.saved-template {
+    border-color: rgba(6, 182, 212, 0.3);
+}
+
+.btn-edit-templates {
+    margin-left: auto;
+    padding: 5px 10px;
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 6px;
+    color: rgba(255,255,255,0.7);
+    cursor: pointer;
+    font-size: 0.8rem;
+}
+
+/* CTA buttons */
+.cta-btn {
+    padding: 12px 25px;
+}
+
+.btn-secondary-large {
+    background: rgba(255,255,255,0.1) !important;
+    border: 1px solid rgba(255,255,255,0.2) !important;
+    margin-left: 10px;
+}
+
+/* Alerts */
+.success-alert, .error-alert {
+    padding: 12px 20px;
+    border-radius: 10px;
+    margin: 15px 0;
+}
+
+.success-alert {
+    background: rgba(16, 185, 129, 0.15);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    color: #10b981;
+}
+
+.error-alert {
+    background: rgba(239, 68, 68, 0.15);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    color: #ef4444;
+}
+
+/* Table */
+.table-container {
+    overflow-x: auto;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.status-sent { color: #10b981; }
+.status-failed { color: #ef4444; }
+
+/* Modal */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.8);
+    justify-content: center;
+    align-items: center;
+}
+
+.modal-content {
+    background: rgba(25, 25, 25, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 15px;
+    padding: 25px;
+    width: 90%;
+    max-width: 500px;
+    max-height: 80vh;
+    overflow-y: auto;
+    position: relative;
+}
+
+.modal-content h3 {
+    color: #c084fc;
+    margin: 0 0 20px 0;
+}
+
+.close {
+    position: absolute;
+    right: 15px;
+    top: 10px;
+    font-size: 28px;
+    color: rgba(255,255,255,0.5);
+    cursor: pointer;
+}
+
+.modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 20px;
+}
+
+/* Templates list */
+.templates-list {
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.template-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px;
+    background: rgba(0,0,0,0.2);
+    border-radius: 8px;
+    margin-bottom: 10px;
+}
+
+.template-info strong {
+    display: block;
+    color: white;
+}
+
+.template-info span {
+    font-size: 0.85rem;
+    color: rgba(255,255,255,0.5);
+}
+
+.template-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.btn-icon {
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: 6px;
+    background: rgba(255,255,255,0.1);
+    color: white;
+    cursor: pointer;
+}
+
+.btn-icon.btn-danger {
     background: rgba(239, 68, 68, 0.2);
     color: #ef4444;
 }
 
-.user-type-badge.assinante {
-    background: rgba(16, 185, 129, 0.2);
-    color: #10b981;
-}
-
-.user-type-badge.free {
-    background: rgba(156, 163, 175, 0.2);
-    color: #9ca3af;
-}
-
-/* Templates Rápidos */
-.quick-actions-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-    gap: 15px;
-    margin-top: 20px;
-}
-
-.quick-action-card {
-    padding: 20px 15px;
-    text-align: center;
-    background: rgba(30, 30, 30, 0.6);
-    border-radius: 12px;
-    transition: all 0.3s ease;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    cursor: pointer;
-}
-
-.quick-action-card:hover {
-    transform: translateY(-3px);
-    background: rgba(40, 40, 40, 0.8);
-    border-color: rgba(192, 132, 252, 0.3);
-    box-shadow: 0 5px 20px rgba(192, 132, 252, 0.1);
-}
-
-.quick-action-icon {
-    font-size: 2rem;
-    margin-bottom: 10px;
-}
-
-.quick-action-card h4 {
-    margin: 10px 0 5px 0;
-    font-size: 0.95rem;
-    color: white;
-}
-
-.quick-action-card p {
-    margin: 0;
-    font-size: 0.8rem;
-    color: rgba(255, 255, 255, 0.6);
-}
-
-/* Alerts */
-.success-alert {
-    background: rgba(16, 185, 129, 0.2);
-    border: 1px solid rgba(16, 185, 129, 0.5);
-    color: #10f981;
-    padding: 15px 20px;
-    border-radius: 12px;
-    margin: 20px 0;
-    font-weight: 500;
-    backdrop-filter: blur(10px);
-}
-
-.error-alert {
-    background: rgba(239, 68, 68, 0.2);
-    border: 1px solid rgba(239, 68, 68, 0.5);
-    color: #ff6b6b;
-    padding: 15px 20px;
-    border-radius: 12px;
-    margin: 20px 0;
-    font-weight: 500;
-    backdrop-filter: blur(10px);
-}
-
-/* Admin Form Section */
-.admin-form-section {
-    padding: 20px;
-    background: rgba(30, 30, 30, 0.6);
-    border-radius: 12px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.admin-form-section h3 {
-    margin-top: 0;
-    margin-bottom: 15px;
-    color: #c084fc;
-}
-
-/* Tabela */
-.table-container {
-    overflow-x: auto;
-    margin-top: 20px;
-    border-radius: 15px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    background: rgba(0, 0, 0, 0.2);
-}
-
-/* Scrollbar customizado */
-.users-list::-webkit-scrollbar {
-    width: 8px;
-}
-
-.users-list::-webkit-scrollbar-track {
-    background: rgba(255, 255, 255, 0.05);
-    border-radius: 10px;
-}
-
-.users-list::-webkit-scrollbar-thumb {
-    background: rgba(192, 132, 252, 0.5);
-    border-radius: 10px;
-}
-
-.users-list::-webkit-scrollbar-thumb:hover {
-    background: rgba(192, 132, 252, 0.7);
-}
-
-/* Responsivo */
-@media (max-width: 768px) {
-    .stats-grid {
-        grid-template-columns: 1fr 1fr;
+/* Responsive */
+@media (max-width: 992px) {
+    .three-column-grid, .stats-row {
+        grid-template-columns: repeat(2, 1fr);
     }
     
     .quick-actions-grid {
-        grid-template-columns: 1fr 1fr 1fr;
+        grid-template-columns: repeat(4, 1fr);
+    }
+}
+
+@media (max-width: 768px) {
+    .three-column-grid, .two-column-grid, .stats-row {
+        grid-template-columns: 1fr;
+    }
+    
+    .quick-actions-grid {
+        grid-template-columns: repeat(3, 1fr);
     }
     
     .next-lecture-info {
         flex-direction: column;
         text-align: center;
-    }
-    
-    .selection-controls {
-        flex-direction: column;
-        align-items: stretch;
-    }
-    
-    .selected-count {
-        margin-left: 0;
-        text-align: center;
-    }
-    
-    .filters-row {
-        flex-direction: column;
-    }
-}
-
-@media (max-width: 480px) {
-    .stats-grid {
-        grid-template-columns: 1fr;
-    }
-    
-    .quick-actions-grid {
-        grid-template-columns: 1fr 1fr;
-    }
-    
-    .stat-number {
-        font-size: 2.2rem;
     }
 }
 </style>
