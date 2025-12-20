@@ -747,7 +747,7 @@ const nextLecture = {
     title: <?php echo json_encode($next_lecture['title']); ?>,
     speaker: <?php echo json_encode($next_lecture['speaker']); ?>,
     date: <?php echo isset($next_lecture['announcement_date']) ? json_encode(date('d/m/Y', strtotime($next_lecture['announcement_date']))) : '""'; ?>,
-    time: <?php echo isset($next_lecture['announcement_time']) ? json_encode($next_lecture['announcement_time']) : '""'; ?>
+    time: <?php echo isset($next_lecture['lecture_time']) ? json_encode(date('H:i', strtotime($next_lecture['lecture_time']))) : '""'; ?>
 };
 <?php else: ?>
 const nextLecture = null;
