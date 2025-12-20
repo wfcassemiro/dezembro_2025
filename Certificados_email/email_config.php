@@ -7,26 +7,25 @@
  */
 
 // ============================================
-// CONFIGURAÇÕES SMTP - PREENCHA COM SEUS DADOS
+// CONFIGURAÇÕES SMTP - HOSTINGER
 // ============================================
 
-// Host SMTP do seu provedor
-define('SMTP_HOST', 'br1189.hostgator.com.br');
+// Servidor SMTP da Hostinger
+define('SMTP_HOST', 'smtp.hostinger.com.br');
 
 // Porta SMTP:
-// - 587 para TLS (STARTTLS) - Recomendado
-// - 465 para SSL
-// - 25 para conexão não criptografada (não recomendado)
-define('SMTP_PORT', 587);
+// - 587 para TLS (STARTTLS)
+// - 465 para SSL (usado pela Hostinger)
+define('SMTP_PORT', 465);
 
 // Tipo de criptografia:
 // - 'tls' para STARTTLS (porta 587)
 // - 'ssl' para SSL (porta 465)
-define('SMTP_SECURE', 'tls');
+define('SMTP_SECURE', 'ssl');
 
 // Credenciais de autenticação
 define('SMTP_USERNAME', 'contato@translators101.com');
-define('SMTP_PASSWORD', 'r:#D$!r=X1'); // SUBSTITUA pela senha real
+define('SMTP_PASSWORD', 'r:#D$!r=X1');
 
 // Email e nome do remetente
 define('SMTP_FROM_EMAIL', 'contato@translators101.com');
