@@ -1406,3 +1406,792 @@ include __DIR__ . '/../vision/includes/sidebar.php';
     };
     </script>    
 </div>
+
+<!-- Modal para Regerar Certificado -->
+<div id="regenerateModal" class="modal">
+    <div class="modal-content glass-modal">
+        <h3><i class="fas fa-redo"></i> Regerar Certificado T101</h3>
+        <p>Tem certeza que deseja regerar o certificado para <strong id="regenUserName"></strong>?</p>
+        <p><small>Isso irá atualizar a data de emissão e gerar um novo arquivo PNG com o design T101.</small></p>
+        
+        <form method="POST" id="regenerateForm">
+            <input type="hidden" name="certificate_id" id="regenCertId">
+            <div class="modal-actions">
+                <button type="button" onclick="closeModal('regenerateModal')" class="modal-btn secondary">Cancelar</button>
+                <button type="submit" name="regenerate_certificate" class="modal-btn primary">
+                    <i class="fas fa-redo"></i> Regerar Certificado T101
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal para Deletar Certificado -->
+<div id="deleteModal" class="modal">
+    <div class="modal-content glass-modal">
+        <h3><i class="fas fa-trash"></i> Deletar Certificado</h3>
+        <p>Tem certeza que deseja deletar o certificado de:</p>
+        <p><strong id="deleteUserName"></strong> - <strong id="deleteLectureName"></strong></p>
+        <p class="warning-text"><strong>⚠️ Esta ação não pode ser desfeita!</strong></p>
+        <p><small>O arquivo físico T101 também será removido permanentemente.</small></p>
+        
+        <form method="POST" id="deleteForm">
+            <input type="hidden" name="certificate_id" id="deleteCertId">
+            <div class="form-group">
+                <label for="confirm_delete">Digite "DELETE" para confirmar:</label>
+                <input type="text" name="confirm_delete" id="confirm_delete" placeholder="DELETE" class="form-control">
+            </div>
+            <div class="modal-actions">
+                <button type="button" onclick="closeModal('deleteModal')" class="modal-btn secondary">Cancelar</button>
+                <button type="submit" name="delete_certificate" class="modal-btn danger">
+                    <i class="fas fa-trash"></i> Deletar Definitivamente
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<style>
+/* Vision UI - Fundo escuro com texto branco */
+.glass-card {
+    background: rgba(25, 25, 25, 0.8) !important;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: white;
+}
+
+.glass-card h2, .glass-card h3 {
+    color: white;
+}
+
+/* Alerts com fundo Vision */
+.success-alert {
+    background: rgba(16, 185, 129, 0.2);
+    border: 1px solid rgba(16, 185, 129, 0.5);
+    color: #10f981;
+    padding: 15px 20px;
+    border-radius: 12px;
+    margin: 20px 0;
+    font-weight: 500;
+    backdrop-filter: blur(10px);
+}
+
+.error-alert {
+    background: rgba(239, 68, 68, 0.2);
+    border: 1px solid rgba(239, 68, 68, 0.5);
+    color: #ff6b6b;
+    padding: 15px 20px;
+    border-radius: 12px;
+    margin: 20px 0;
+    font-weight: 500;
+    backdrop-filter: blur(10px);
+}
+
+/* Estatísticas com Vision */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+    margin-top: 20px;
+}
+
+.stat-item {
+    text-align: center;
+    padding: 25px 20px;
+    background: rgba(142, 68, 173, 0.2);
+    border-radius: 15px;
+    border: 1px solid rgba(142, 68, 173, 0.3);
+    transition: transform 0.2s ease;
+    backdrop-filter: blur(10px);
+}
+
+.stat-item:hover {
+    transform: translateY(-2px);
+    background: rgba(142, 68, 173, 0.3);
+}
+
+.stat-number {
+    font-size: 2.8rem;
+    font-weight: bold;
+    color: #c084fc;
+    margin-bottom: 8px;
+}
+
+.stat-label {
+    font-size: 0.95rem;
+    color: rgba(255, 255, 255, 0.8);
+    font-weight: 500;
+}
+
+/* Formulário com Vision */
+.admin-form-section {
+    margin: 30px 0;
+    padding: 30px;
+    background: rgba(30, 30, 30, 0.6);
+    border-radius: 15px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+}
+
+.admin-form-section h3 {
+    color: #c084fc;
+    margin-bottom: 25px;
+}
+
+.form-group.full-width {
+    grid-column: 1 / -1;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 600;
+    color: white;
+}
+
+.form-control {
+    width: 100%;
+    padding: 12px 16px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 10px;
+    font-size: 1rem;
+    background: rgba(0, 0, 0, 0.3);
+    color: white;
+    transition: all 0.3s ease;
+}
+
+.form-control:focus {
+    outline: none;
+    border-color: #c084fc;
+    box-shadow: 0 0 0 3px rgba(192, 132, 252, 0.1);
+    background: rgba(0, 0, 0, 0.5);
+}
+
+.form-control option {
+    background: #1a1a1a;
+    color: white;
+}
+
+/* Botão de gerar no topo */
+.generate-section {
+    text-align: center;
+    margin-bottom: 30px;
+    padding: 25px;
+    background: rgba(192, 132, 252, 0.1);
+    border: 1px solid rgba(192, 132, 252, 0.2);
+    border-radius: 15px;
+}
+
+.generate-btn {
+    font-size: 1.1rem;
+    padding: 18px 35px;
+    min-width: 300px;
+    transition: all 0.3s ease;
+}
+
+.generate-btn:disabled {
+    background: rgba(100, 100, 100, 0.3) !important;
+    color: rgba(255, 255, 255, 0.5) !important;
+    cursor: not-allowed;
+    transform: none !important;
+    box-shadow: none !important;
+}
+
+.generate-info {
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 0.9rem;
+    margin-top: 10px;
+    margin-bottom: 0;
+}
+
+.generate-info i {
+    color: #c084fc;
+    margin-right: 8px;
+}
+
+/* Campo de busca */
+.search-section {
+    margin-bottom: 20px;
+}
+
+.search-box {
+    position: relative;
+    display: flex;
+    align-items: center;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 12px;
+    padding: 0 15px;
+    transition: all 0.3s ease;
+}
+
+.search-box:focus-within {
+    border-color: #c084fc;
+    box-shadow: 0 0 0 3px rgba(192, 132, 252, 0.1);
+    background: rgba(0, 0, 0, 0.5);
+}
+
+.search-box i.fa-search {
+    color: rgba(255, 255, 255, 0.5);
+    margin-right: 12px;
+}
+
+.search-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: white;
+    font-size: 1rem;
+    padding: 15px 0;
+}
+
+.search-input::placeholder {
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.clear-search {
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.5);
+    cursor: pointer;
+    padding: 5px;
+    border-radius: 5px;
+    transition: all 0.2s ease;
+    display: none;
+}
+
+.clear-search:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+}
+
+.clear-search.visible {
+    display: block;
+}
+
+/* Estado sem resultados */
+.no-results {
+    text-align: center;
+    padding: 40px 20px;
+    color: rgba(255, 255, 255, 0.7);
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+}
+
+.no-results i {
+    font-size: 2.5rem;
+    color: #f39c12;
+    margin-bottom: 15px;
+    display: block;
+}
+
+.no-results p {
+    font-size: 1rem;
+    margin: 0;
+}
+
+/* Controles de seleção de palestras */
+.select-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 20px;
+    background: rgba(142, 68, 173, 0.2);
+    border: 1px solid rgba(142, 68, 173, 0.3);
+    border-radius: 10px;
+    margin-bottom: 20px;
+}
+
+.lectures-count {
+    color: #c084fc;
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+/* Grid de cards das palestras */
+.lectures-cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 15px;
+    max-height: 400px;
+    overflow-y: auto;
+    padding: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    background: rgba(0, 0, 0, 0.2);
+}
+
+/* Card individual da palestra */
+.lecture-card {
+    background: rgba(25, 25, 25, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    transition: all 0.3s ease;
+    cursor: pointer;
+    backdrop-filter: blur(10px);
+}
+
+.lecture-card:hover {
+    background: rgba(40, 40, 40, 0.9);
+    border-color: rgba(192, 132, 252, 0.3);
+    transform: translateY(-2px);
+    box-shadow: 0 5px 20px rgba(192, 132, 252, 0.1);
+}
+
+.lecture-card-header {
+    padding: 15px;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.lecture-card input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    accent-color: #c084fc;
+    margin-top: 2px;
+    flex-shrink: 0;
+}
+
+.lecture-card-label {
+    flex: 1;
+    cursor: pointer;
+    display: block;
+}
+
+.lecture-title {
+    color: white;
+    font-size: 0.95rem;
+    font-weight: 500;
+    line-height: 1.4;
+    display: block;
+}
+
+/* Badge para padrão S##E## */
+.season-badge {
+    display: inline-block;
+    background: rgba(52, 152, 219, 0.3);
+    color: #3498db;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin-left: 8px;
+    vertical-align: top;
+}
+
+/* Estado vazio */
+.empty-lectures {
+    text-align: center;
+    padding: 40px 20px;
+    color: rgba(255, 255, 255, 0.7);
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+}
+
+.empty-lectures i {
+    font-size: 2.5rem;
+    color: #f39c12;
+    margin-bottom: 15px;
+    display: block;
+}
+
+.empty-lectures p {
+    font-size: 1rem;
+    margin: 0;
+}
+
+.options-row {
+    display: flex;
+    gap: 30px;
+    margin-bottom: 25px;
+}
+
+.checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    font-size: 0.95rem;
+    color: white;
+}
+
+.checkbox-label input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    accent-color: #c084fc;
+}
+
+/* Tabela com Vision */
+.table-container {
+    overflow-x: auto;
+    margin-top: 25px;
+    border-radius: 15px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(0, 0, 0, 0.2);
+}
+
+.certificates-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.certificates-table th {
+    background: rgba(142, 68, 173, 0.6);
+    color: white;
+    padding: 18px 15px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 0.95rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.certificates-table td {
+    padding: 18px 15px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    vertical-align: middle;
+}
+
+.certificates-table tbody tr {
+    background: rgba(0, 0, 0, 0.1);
+    transition: background-color 0.2s ease;
+}
+
+.certificates-table tbody tr:nth-child(even) {
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.certificates-table tbody tr:hover {
+    background: rgba(142, 68, 173, 0.1);
+}
+
+.user-info strong {
+    color: white;
+    font-weight: 600;
+}
+
+.user-info small {
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 0.85rem;
+}
+
+.lecture-info strong {
+    color: #c084fc;
+    font-weight: 600;
+    line-height: 1.4;
+}
+
+.duration-col {
+    font-weight: 600;
+    color: white;
+    font-size: 0.95rem;
+}
+
+/* Status do arquivo */
+.file-status {
+    font-size: 0.85rem;
+    font-weight: 600;
+    padding: 4px 8px;
+    border-radius: 12px;
+}
+
+.file-status.exists {
+    color: #10b981;
+    background: rgba(16, 185, 129, 0.1);
+}
+
+.file-status.missing {
+    color: #ef4444;
+    background: rgba(239, 68, 68, 0.1);
+}
+
+/* Botões de ação */
+.action-buttons {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.action-btn {
+    width: 36px;
+    height: 36px;
+    border: none;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-decoration: none;
+    font-size: 0.9rem;
+}
+
+.view-btn {
+    background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+    color: white;
+}
+
+.view-btn:hover {
+    background: linear-gradient(135deg, #1d4ed8, #1e40af);
+    transform: translateY(-1px);
+}
+
+.download-btn {
+    background: linear-gradient(135deg, #10b981, #059669);
+    color: white;
+}
+
+.download-btn:hover {
+    background: linear-gradient(135deg, #059669, #047857);
+    transform: translateY(-1px);
+}
+
+.verify-btn {
+    background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+    color: white;
+}
+
+.verify-btn:hover {
+    background: linear-gradient(135deg, #7c3aed, #6d28d9);
+    transform: translateY(-1px);
+}
+
+.regen-btn {
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+    color: white;
+}
+
+.regen-btn:hover {
+    background: linear-gradient(135deg, #d97706, #b45309);
+    transform: translateY(-1px);
+}
+
+.delete-btn {
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+    color: white;
+}
+
+.delete-btn:hover {
+    background: linear-gradient(135deg, #dc2626, #b91c1c);
+    transform: translateY(-1px);
+}
+
+/* Empty state */
+.empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.empty-state i {
+    font-size: 4rem;
+    margin-bottom: 20px;
+    opacity: 0.3;
+    color: #c084fc;
+}
+
+.empty-state p {
+    font-size: 1.1rem;
+    font-weight: 500;
+}
+
+/* Modais com Vision */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(8px);
+}
+
+.glass-modal {
+    background: rgba(25, 25, 25, 0.95) !important;
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: white;
+}
+
+.modal-content {
+    margin: 2% auto;
+    padding: 35px;
+    border-radius: 20px;
+    width: 90%;
+    max-width: 500px;
+    max-height: 95vh;
+    overflow-y: auto;
+    position: relative;
+    box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5);
+}
+
+/* Scrollbar customizado para o modal */
+.modal-content::-webkit-scrollbar {
+    width: 8px;
+}
+
+.modal-content::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 10px;
+}
+
+.modal-content::-webkit-scrollbar-thumb {
+    background: rgba(192, 132, 252, 0.5);
+    border-radius: 10px;
+}
+
+.modal-content::-webkit-scrollbar-thumb:hover {
+    background: rgba(192, 132, 252, 0.7);
+}
+
+.modal-content h3 {
+    color: #c084fc;
+    margin-bottom: 20px;
+    font-size: 1.4rem;
+}
+
+.warning-text {
+    color: #ff6b6b;
+    font-weight: 600;
+    margin: 15px 0;
+}
+
+.modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 15px;
+    margin-top: 30px;
+}
+
+.modal-btn {
+    padding: 12px 24px;
+    border: none;
+    border-radius: 10px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.modal-btn.secondary {
+    background: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.modal-btn.secondary:hover {
+    background: rgba(255, 255, 255, 0.2);
+    color: white;
+}
+
+.modal-btn.primary {
+    background: linear-gradient(135deg, #c084fc, #a855f7);
+    color: white;
+}
+
+.modal-btn.primary:hover {
+    background: linear-gradient(135deg, #a855f7, #9333ea);
+}
+
+.modal-btn.danger {
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+    color: white;
+}
+
+.modal-btn.danger:hover {
+    background: linear-gradient(135deg, #dc2626, #b91c1c);
+}
+
+/* Responsivo */
+@media (max-width: 768px) {
+    .options-row {
+        flex-direction: column;
+        gap: 15px;
+    }
+    
+    .stats-grid {
+        grid-template-columns: 1fr;
+        gap: 15px;
+    }
+    
+    .action-buttons {
+        flex-direction: column;
+        gap: 5px;
+    }
+    
+    .action-btn {
+        width: 100%;
+        height: 40px;
+        justify-content: flex-start;
+        padding-left: 15px;
+    }
+    
+    .modal-content {
+        margin: 20% auto;
+        width: 95%;
+        padding: 25px;
+    }
+    
+    .modal-actions {
+        flex-direction: column;
+        gap: 10px;
+    }
+    
+    .certificates-table {
+        font-size: 0.9rem;
+    }
+    
+    .certificates-table th,
+    .certificates-table td {
+        padding: 12px 8px;
+    }
+    
+    /* Cards responsivos */
+    .lectures-cards-grid {
+        grid-template-columns: 1fr;
+        max-height: 300px;
+    }
+    
+    .select-controls {
+        flex-direction: column;
+        gap: 10px;
+        text-align: center;
+    }
+    
+    /* Botão de gerar responsivo */
+    .generate-btn {
+        font-size: 1rem;
+        padding: 15px 25px;
+        min-width: 250px;
+    }
+    
+    /* Campo de busca responsivo */
+    .search-box {
+        padding: 0 12px;
+    }
+    
+    .search-input {
+        padding: 12px 0;
+        font-size: 0.95rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .admin-form-section {
+        padding: 20px;
+        margin: 20px 0;
+    }
+    
+    .stat-number {
+        font-size: 2.2rem;
+    }
+}
+</style>
