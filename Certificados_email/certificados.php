@@ -904,3 +904,505 @@ include __DIR__ . '/../vision/includes/sidebar.php';
             </div>
         <?php endif; ?>
     </div>
+    <!-- Modal para Importar CSV -->
+    <div id="csvImportModal" class="modal">
+        <div class="modal-content glass-modal" style="max-width: 900px;">
+            <span class="close" onclick="closeModal('csvImportModal')">&times;</span>
+            <h3><i class="fas fa-file-csv"></i> Importar CSV de Presença</h3>
+            
+            <form method="POST" enctype="multipart/form-data" id="csvImportForm" onsubmit="return validateCsvForm()">
+                <!-- Campo de data (será preenchido automaticamente) -->
+                <input type="hidden" name="csv_date" id="csv_date_hidden">
+                
+                <!-- Seletor de Palestras Agendadas -->
+                <div class="form-group">
+                    <label for="scheduled_lecture_select">
+                        <i class="fas fa-calendar-alt"></i> Selecionar Palestra Agendada
+                    </label>
+                    <select id="scheduled_lecture_select" class="form-control" onchange="loadLectureData(this.value)">
+                        <option value="">-- Carregar dados de uma palestra agendada --</option>
+                    </select>
+                    <small style="color: rgba(255, 255, 255, 0.6); display: block; margin-top: 5px;">
+                        Selecione uma palestra para preencher automaticamente título, palestrante e data
+                    </small>
+                </div>
+                
+                <div style="text-align: center; margin: 20px 0; color: rgba(255, 255, 255, 0.5); font-size: 0.9rem;">
+                    — OU —
+                </div>
+                
+                <!-- Upload do arquivo -->
+                <div class="form-group">
+                    <label for="csv_file">Selecionar arquivo CSV *</label>
+                    <input type="file" name="csv_file" id="csv_file" accept=".csv" required class="form-control" onchange="processCsvFile(this)">
+                    <small style="color: rgba(255, 255, 255, 0.6); display: block; margin-top: 5px;">
+                        Formato esperado: Nome;Email;Tempo Online (minutos)
+                    </small>
+                </div>
+                
+                <!-- Prévia dos dados do CSV -->
+                <div id="csv_preview" style="display: none; background: rgba(52, 152, 219, 0.1); border: 1px solid rgba(52, 152, 219, 0.3); border-radius: 8px; padding: 15px; margin: 20px 0;">
+                    <h4 style="color: #3498db; margin: 0 0 10px 0;">
+                        <i class="fas fa-info-circle"></i> Informações extraídas do CSV
+                    </h4>
+                    <div id="csv_info"></div>
+                </div>
+                
+                <!-- Dados da palestra (editáveis) -->
+                <div id="lecture_data_section" style="display: none;">
+                    <h4 style="color: #c084fc; margin: 20px 0 15px 0;">
+                        <i class="fas fa-edit"></i> Confirmar ou editar dados da palestra
+                    </h4>
+                    
+                    <!-- Data da palestra (visível para o usuário) -->
+                    <div class="form-group">
+                        <label for="csv_date_display">Data da Palestra *</label>
+                        <input type="date" id="csv_date_display" required class="form-control" onchange="updateHiddenDate()">
+                        <small style="color: rgba(255, 255, 255, 0.6); display: block; margin-top: 5px;">
+                            Extraída automaticamente do CSV, pode ser editada
+                        </small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="lecture_title_manual">Título da Palestra *</label>
+                        <input type="text" name="lecture_title_manual" id="lecture_title_manual" required class="form-control" placeholder="Ex: Palestra ao Vivo - 01/12/2025">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="speaker_name_manual">Nome do Palestrante *</label>
+                        <input type="text" name="speaker_name_manual" id="speaker_name_manual" required class="form-control" placeholder="Ex: William Cassemiro">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="duration_minutes_manual">Duração (minutos) *</label>
+                        <input type="number" name="duration_minutes_manual" id="duration_minutes_manual" required class="form-control" value="60" min="1" max="600">
+                        <small style="color: rgba(255, 255, 255, 0.6); display: block; margin-top: 5px;">
+                            Será convertido em horas no certificado (arredondado)
+                        </small>
+                    </div>
+                    
+                    <!-- Lista de Participantes -->
+                    <div id="participants_section" style="margin-top: 30px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                            <h4 style="color: #c084fc; margin: 0;">
+                                <i class="fas fa-users"></i> Participantes (<span id="selected_count">0</span>/<span id="total_participants_count">0</span>)
+                            </h4>
+                            <div>
+                                <button type="button" onclick="selectAllParticipants()" class="modal-btn secondary" style="padding: 8px 15px; font-size: 0.85rem; margin-right: 10px;">
+                                    <i class="fas fa-check-square"></i> Selecionar Todos
+                                </button>
+                                <button type="button" onclick="deselectAllParticipants()" class="modal-btn secondary" style="padding: 8px 15px; font-size: 0.85rem;">
+                                    <i class="fas fa-square"></i> Desmarcar Todos
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- Lista com checkboxes -->
+                        <div id="participants_list" style="max-height: 400px; overflow-y: auto; background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 10px; padding: 15px;">
+                            <!-- Será preenchido dinamicamente -->
+                        </div>
+                    </div>
+                    
+                    <div style="background: rgba(46, 204, 113, 0.1); border: 1px solid rgba(46, 204, 113, 0.3); border-radius: 8px; padding: 15px; margin: 20px 0;">
+                        <p style="margin: 0; color: rgba(255, 255, 255, 0.9);">
+                            <i class="fas fa-certificate"></i> <strong id="certificates_to_generate">0</strong> certificados serão gerados
+                        </p>
+                        <p style="margin: 10px 0 0 0; color: rgba(255, 255, 255, 0.7); font-size: 0.9rem;">
+                            <i class="fas fa-envelope"></i> Emails serão enviados automaticamente após a geração
+                        </p>
+                    </div>
+                </div>
+                
+                <div class="modal-actions">
+                    <button type="button" onclick="closeModal('csvImportModal')" class="modal-btn secondary">Cancelar</button>
+                    <button type="submit" name="import_csv" class="modal-btn primary" id="import_csv_btn" disabled>
+                        <i class="fas fa-certificate"></i> Gerar Certificados
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <style>
+    .close {
+        color: #aaa;
+        float: right;
+        font-size: 28px;
+        font-weight: bold;
+        cursor: pointer;
+        line-height: 20px;
+    }
+    
+    .close:hover,
+    .close:focus {
+        color: #fff;
+    }
+    
+    .participant-item {
+        background: rgba(25, 25, 25, 0.8);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 8px;
+        padding: 12px 15px;
+        margin-bottom: 10px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        transition: all 0.2s ease;
+    }
+    
+    .participant-item:hover {
+        background: rgba(40, 40, 40, 0.9);
+        border-color: rgba(192, 132, 252, 0.3);
+    }
+    
+    .participant-item input[type="checkbox"] {
+        width: 18px;
+        height: 18px;
+        accent-color: #c084fc;
+        cursor: pointer;
+    }
+    
+    .participant-info {
+        flex: 1;
+    }
+    
+    .participant-name {
+        color: white;
+        font-weight: 600;
+        display: block;
+        margin-bottom: 3px;
+    }
+    
+    .participant-email {
+        color: rgba(255, 255, 255, 0.6);
+        font-size: 0.85rem;
+    }
+    
+    .participant-time {
+        background: rgba(52, 152, 219, 0.2);
+        color: #3498db;
+        padding: 4px 10px;
+        border-radius: 12px;
+        font-size: 0.85rem;
+        font-weight: 600;
+    }
+    </style>
+    
+    <script>
+    let csvParticipants = [];
+    
+    function openModal(modalId) {
+        document.getElementById(modalId).style.display = 'block';
+    }
+    
+    function updateHiddenDate() {
+        const displayDate = document.getElementById('csv_date_display').value;
+        document.getElementById('csv_date_hidden').value = displayDate;
+        console.log('Data atualizada:', displayDate);
+    }
+    
+    function validateCsvForm() {
+        const csvDate = document.getElementById('csv_date_hidden').value;
+        const lectureTitle = document.getElementById('lecture_title_manual').value;
+        const speakerName = document.getElementById('speaker_name_manual').value;
+        const selectedEmails = document.querySelectorAll('input[name="participant_emails[]"]:checked').length;
+        
+        console.log('Validação:', {csvDate, lectureTitle, speakerName, selectedEmails});
+        
+        if (!csvDate) {
+            alert('Data da palestra não foi preenchida. Por favor, verifique.');
+            return false;
+        }
+        
+        if (!lectureTitle || !speakerName) {
+            alert('Título e palestrante são obrigatórios.');
+            return false;
+        }
+        
+        if (selectedEmails === 0) {
+            alert('Selecione pelo menos um participante.');
+            return false;
+        }
+        
+        if (!confirm(`Gerar ${selectedEmails} certificado(s) para "${lectureTitle}"?\n\nEmails serão enviados automaticamente.`)) {
+            return false;
+        }
+        
+        return true;
+    }
+    
+    function processCsvFile(input) {
+        if (!input.files || !input.files[0]) return;
+        
+        const file = input.files[0];
+        const reader = new FileReader();
+        
+        reader.onload = function(e) {
+            const text = e.target.result;
+            const lines = text.split('\n');
+            
+            let lectureTitle = '';
+            let speakerName = '';
+            let lectureDate = '';
+            let duration = 60;
+            csvParticipants = [];
+            
+            console.log('Processando CSV com', lines.length, 'linhas');
+            
+            // Processar linhas
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i].trim();
+                
+                if (line.startsWith('# Palestra:')) {
+                    lectureTitle = line.replace('# Palestra:', '').replace(/;/g, '').trim();
+                    console.log('Título encontrado:', lectureTitle);
+                } else if (line.startsWith('# Palestrante:')) {
+                    speakerName = line.replace('# Palestrante:', '').replace(/;/g, '').trim();
+                    console.log('Palestrante encontrado:', speakerName);
+                } else if (line.startsWith('# Data:')) {
+                    const dateStr = line.replace('# Data:', '').replace(/;/g, '').trim();
+                    console.log('Data string encontrada:', dateStr);
+                    // Converter dd/mm/yyyy para yyyy-mm-dd
+                    const parts = dateStr.split('/');
+                    if (parts.length === 3) {
+                        lectureDate = parts[2] + '-' + parts[1] + '-' + parts[0];
+                        console.log('Data convertida:', lectureDate);
+                    }
+                } else if (line && !line.startsWith('#') && !line.toLowerCase().startsWith('nome')) {
+                    const cols = line.split(';');
+                    if (cols.length >= 3 && cols[0].trim() && cols[1].trim()) {
+                        csvParticipants.push({
+                            name: cols[0].trim(),
+                            email: cols[1].trim(),
+                            minutes: parseInt(cols[2].trim()) || 0,
+                            selected: true
+                        });
+                    }
+                }
+            }
+            
+            console.log('Participantes encontrados:', csvParticipants.length);
+            
+            // Preencher campos
+            if (lectureTitle) {
+                document.getElementById('lecture_title_manual').value = lectureTitle;
+            }
+            if (speakerName) {
+                document.getElementById('speaker_name_manual').value = speakerName;
+            }
+            if (lectureDate) {
+                document.getElementById('csv_date_display').value = lectureDate;
+                document.getElementById('csv_date_hidden').value = lectureDate;
+                console.log('Data preenchida nos campos:', lectureDate);
+            } else {
+                // Se não encontrou data no CSV, usar data de hoje
+                const today = new Date().toISOString().split('T')[0];
+                document.getElementById('csv_date_display').value = today;
+                document.getElementById('csv_date_hidden').value = today;
+                console.log('Data padrão (hoje) preenchida:', today);
+            }
+            
+            document.getElementById('duration_minutes_manual').value = duration;
+            
+            // Renderizar lista de participantes
+            if (csvParticipants.length > 0) {
+                renderParticipantsList();
+                
+                // Mostrar prévia
+                let infoHtml = '<ul style="margin: 5px 0; padding-left: 20px; color: rgba(255, 255, 255, 0.9);">';
+                if (lectureTitle) infoHtml += `<li><strong>Palestra:</strong> ${lectureTitle}</li>`;
+                if (speakerName) infoHtml += `<li><strong>Palestrante:</strong> ${speakerName}</li>`;
+                if (lectureDate) infoHtml += `<li><strong>Data:</strong> ${lectureDate.split('-').reverse().join('/')}</li>`;
+                infoHtml += `<li><strong>Participantes:</strong> ${csvParticipants.length}</li>`;
+                infoHtml += '</ul>';
+                
+                document.getElementById('csv_info').innerHTML = infoHtml;
+                document.getElementById('csv_preview').style.display = 'block';
+                document.getElementById('lecture_data_section').style.display = 'block';
+                document.getElementById('import_csv_btn').disabled = false;
+                
+                updateCsvCounters();
+            } else {
+                alert('Nenhum participante válido encontrado no CSV.');
+                document.getElementById('csv_preview').style.display = 'none';
+                document.getElementById('lecture_data_section').style.display = 'none';
+                document.getElementById('import_csv_btn').disabled = true;
+            }
+        };
+        
+        reader.readAsText(file, 'UTF-8');
+    }
+    
+    function renderParticipantsList() {
+        console.log('🎨 Renderizando lista de participantes...');
+        console.log('   Total de participantes:', csvParticipants.length);
+        
+        const container = document.getElementById('participants_list');
+        
+        if (!container) {
+            console.error('❌ Container participants_list não encontrado!');
+            return;
+        }
+        
+        let html = '';
+        
+        csvParticipants.forEach((p, index) => {
+            console.log(`   ${index + 1}. ${p.name} (${p.email})`);
+            html += `
+                <div class="participant-item">
+                    <input type="checkbox" 
+                           name="participant_emails[]" 
+                           value="${p.email}" 
+                           id="participant_${index}" 
+                           ${p.selected ? 'checked' : ''} 
+                           onchange="updateCsvCounters()">
+                    <label for="participant_${index}" class="participant-info" style="cursor: pointer;">
+                        <span class="participant-name">${p.name}</span>
+                        <span class="participant-email">${p.email}</span>
+                    </label>
+                    <span class="participant-time">${p.minutes} min</span>
+                </div>
+            `;
+        });
+        
+        container.innerHTML = html;
+        console.log('✅ Lista renderizada com sucesso');
+    }
+    
+    function selectAllParticipants() {
+        document.querySelectorAll('input[name="participant_emails[]"]').forEach(cb => {
+            cb.checked = true;
+        });
+        updateCsvCounters();
+    }
+    
+    function deselectAllParticipants() {
+        document.querySelectorAll('input[name="participant_emails[]"]').forEach(cb => {
+            cb.checked = false;
+        });
+        updateCsvCounters();
+    }
+    
+    function updateCsvCounters() {
+        const total = csvParticipants.length;
+        const selected = document.querySelectorAll('input[name="participant_emails[]"]:checked').length;
+        
+        // Verificar se elementos existem antes de atualizar
+        const totalElem = document.getElementById('total_participants_count');
+        const selectedElem = document.getElementById('selected_count');
+        const certsElem = document.getElementById('certificates_to_generate');
+        const btnElem = document.getElementById('import_csv_btn');
+        
+        if (totalElem) totalElem.textContent = total;
+        if (selectedElem) selectedElem.textContent = selected;
+        if (certsElem) certsElem.textContent = selected;
+        
+        // Habilitar/desabilitar botão de gerar
+        if (btnElem) btnElem.disabled = (selected === 0);
+    }
+    </script>
+    
+    <script>
+    // Função para carregar palestras agendadas ao abrir o modal
+    function loadScheduledLectures() {
+        console.log('🔄 Carregando palestras agendadas...');
+        
+        fetch('get_upcoming_lectures.php')
+            .then(response => {
+                console.log('📡 Resposta recebida:', response.status);
+                return response.json();
+            })
+            .then(data => {
+                console.log('📊 Dados recebidos:', data);
+                
+                if (data.success && data.lectures) {
+                    console.log('✅ Palestras encontradas:', data.lectures.length);
+                    const select = document.getElementById('scheduled_lecture_select');
+                    
+                    if (!select) {
+                        console.error('❌ Elemento select não encontrado!');
+                        return;
+                    }
+                    
+                    // Limpar opções anteriores (exceto a primeira)
+                    while (select.options.length > 1) {
+                        select.remove(1);
+                    }
+                    
+                    // Adicionar palestras
+                    data.lectures.forEach((lecture, index) => {
+                        const option = document.createElement('option');
+                        option.value = JSON.stringify(lecture);
+                        option.textContent = `${lecture.formatted_date} - ${lecture.title} (${lecture.speaker})`;
+                        select.appendChild(option);
+                        console.log(`  ${index + 1}. ${lecture.title}`);
+                    });
+                    
+                    console.log('✅ Dropdown populado com sucesso');
+                } else {
+                    console.warn('⚠️ Nenhuma palestra encontrada ou erro no servidor');
+                }
+            })
+            .catch(error => {
+                console.error('❌ Erro ao carregar palestras:', error);
+                alert('Erro ao carregar palestras agendadas. Verifique o console para mais detalhes.');
+            });
+    }
+    
+    // Função para carregar dados da palestra selecionada
+    function loadLectureData(jsonData) {
+        if (!jsonData) return;
+        
+        try {
+            const lecture = JSON.parse(jsonData);
+            
+            // Preencher campos
+            document.getElementById('lecture_title_manual').value = lecture.title || '';
+            document.getElementById('speaker_name_manual').value = lecture.speaker || '';
+            
+            // Preencher data
+            if (lecture.date_input) {
+                document.getElementById('csv_date_display').value = lecture.date_input;
+                document.getElementById('csv_date_hidden').value = lecture.date_input;
+            }
+            
+            // Mostrar seção de dados da palestra
+            document.getElementById('lecture_data_section').style.display = 'block';
+            
+            // Mostrar mensagem de sucesso
+            const infoHtml = `
+                <ul style="margin: 5px 0; padding-left: 20px; color: rgba(255, 255, 255, 0.9);">
+                    <li><strong>Palestra:</strong> ${lecture.title}</li>
+                    <li><strong>Palestrante:</strong> ${lecture.speaker}</li>
+                    <li><strong>Data:</strong> ${lecture.formatted_date}</li>
+                    ${lecture.lecture_time ? `<li><strong>Horário:</strong> ${lecture.lecture_time}h</li>` : ''}
+                </ul>
+                <p style="color: #2ecc71; margin-top: 10px;">
+                    <i class="fas fa-check-circle"></i> Dados carregados! Agora faça upload do CSV com os participantes.
+                </p>
+            `;
+            document.getElementById('csv_info').innerHTML = infoHtml;
+            document.getElementById('csv_preview').style.display = 'block';
+            
+        } catch (error) {
+            console.error('Erro ao processar dados da palestra:', error);
+            alert('Erro ao carregar dados da palestra');
+        }
+    }
+    
+    // Modificar a função de abertura do modal para carregar as palestras
+    const originalOpenModal = window.openModal;
+    window.openModal = function(modalId) {
+        if (originalOpenModal) {
+            originalOpenModal(modalId);
+        } else {
+            document.getElementById(modalId).style.display = 'flex';
+        }
+        
+        // Carregar palestras quando abrir o modal CSV
+        if (modalId === 'csvImportModal') {
+            loadScheduledLectures();
+        }
+    };
+    </script>    
+</div>
