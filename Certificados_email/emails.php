@@ -516,13 +516,17 @@ include __DIR__ . '/../vision/includes/sidebar.php';
                 </div>
             </div>
             
-            <!-- Palestra Relacionada -->
+            <!-- Palestra Relacionada (Palestras Agendadas) -->
             <div class="form-group">
-                <label><i class="fas fa-chalkboard-teacher"></i> Palestra Relacionada (opcional)</label>
+                <label><i class="fas fa-chalkboard-teacher"></i> Palestra Agendada (opcional)</label>
                 <select name="lecture_id" id="lecture_id" class="form-control">
                     <option value="">Nenhuma</option>
                     <?php foreach ($all_lectures as $lecture): ?>
-                    <option value="<?php echo $lecture['id']; ?>"><?php echo htmlspecialchars($lecture['title']); ?> - <?php echo htmlspecialchars($lecture['speaker']); ?></option>
+                    <option value="<?php echo $lecture['id']; ?>">
+                        <?php echo date('d/m/Y', strtotime($lecture['announcement_date'])); ?> - 
+                        <?php echo htmlspecialchars($lecture['title']); ?> 
+                        (<?php echo htmlspecialchars($lecture['speaker']); ?>)
+                    </option>
                     <?php endforeach; ?>
                 </select>
             </div>
