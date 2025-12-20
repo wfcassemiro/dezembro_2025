@@ -383,7 +383,7 @@ try {
     $stmt = $pdo->query("
         SELECT id, name, email, role, 
                COALESCE(is_subscriber, 0) as is_subscriber,
-               CASE WHEN password IS NOT NULL AND password != '' THEN 1 ELSE 0 END as has_password,
+               CASE WHEN password_hash IS NOT NULL AND password_hash != '' THEN 1 ELSE 0 END as has_password,
                created_at,
                CASE 
                    WHEN role = 'admin' THEN 'Admin'
