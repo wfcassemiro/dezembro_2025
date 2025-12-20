@@ -436,15 +436,15 @@ include __DIR__ . '/../vision/includes/sidebar.php';
     <!-- Próxima Palestra -->
     <?php if ($next_lecture): ?>
     <div class="video-card glass-card">
-        <h3><i class="fas fa-calendar-alt"></i> Próxima Palestra</h3>
+        <h3><i class="fas fa-calendar-alt"></i> Próxima Palestra Agendada</h3>
         <div class="next-lecture-info">
             <div class="lecture-details">
                 <h4><?php echo htmlspecialchars($next_lecture['title']); ?></h4>
                 <p><i class="fas fa-user"></i> <?php echo htmlspecialchars($next_lecture['speaker']); ?></p>
                 <?php if (isset($next_lecture['announcement_date'])): ?>
                 <p><i class="fas fa-calendar"></i> <?php echo date('d/m/Y', strtotime($next_lecture['announcement_date'])); ?>
-                    <?php if (isset($next_lecture['announcement_time'])): ?>
-                    às <?php echo $next_lecture['announcement_time']; ?>
+                    <?php if (isset($next_lecture['lecture_time'])): ?>
+                    às <?php echo date('H:i', strtotime($next_lecture['lecture_time'])); ?>h
                     <?php endif; ?>
                 </p>
                 <?php endif; ?>
