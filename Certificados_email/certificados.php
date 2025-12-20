@@ -2195,3 +2195,190 @@ include __DIR__ . '/../vision/includes/sidebar.php';
     }
 }
 </style>
+
+<script>
+// Função para atualizar contador do botão
+function updateGenerateButton() {
+    const selectedCheckboxes = document.querySelectorAll('.lecture-checkbox:checked');
+    const generateBtn = document.getElementById('generate_btn');
+    const count = selectedCheckboxes.length;
+    
+    if (count > 0) {
+        generateBtn.disabled = false;
+        generateBtn.innerHTML = `<i class="fas fa-certificate"></i> Gerar ${count} certificado${count > 1 ? 's' : ''}`;
+    } else {
+        generateBtn.disabled = true;
+        generateBtn.innerHTML = `<i class="fas fa-certificate"></i> Selecione palestras para gerar certificados`;
+    }
+}
+
+// Função para atualizar contadores
+function updateCounters() {
+    const visibleCards = document.querySelectorAll('.lecture-card:not([style*="display: none"])');
+    const visibleCount = visibleCards.length;
+    const totalCount = document.querySelectorAll('.lecture-card').length;
+    
+    document.getElementById('visible_count').textContent = visibleCount;
+    
+    // Atualizar texto do select all
+    const selectAllLabel = document.querySelector('label[for="select_all_lectures"]');
+    selectAllLabel.innerHTML = `
+        <input type="checkbox" id="select_all_lectures"> 
+        Selecionar todas as palestras ${visibleCount < totalCount ? 'visíveis' : ''}
+    `;
+}
+
+// Funcionalidade de busca
+document.getElementById('lecture_search').addEventListener('input', function() {
+    const searchTerm = this.value.toLowerCase().trim();
+    const cards = document.querySelectorAll('.lecture-card');
+    const noResults = document.getElementById('no_results');
+    const clearBtn = document.getElementById('clear_search');
+    let visibleCount = 0;
+    
+    // Mostrar/ocultar botão limpar
+    clearBtn.classList.toggle('visible', searchTerm.length > 0);
+    
+    cards.forEach(card => {
+        const title = card.dataset.title;
+        const isVisible = searchTerm === '' || title.includes(searchTerm);
+        
+        card.style.display = isVisible ? 'block' : 'none';
+        if (isVisible) visibleCount++;
+    });
+    
+    // Mostrar/ocultar estado "sem resultados"
+    noResults.style.display = visibleCount === 0 && searchTerm !== '' ? 'block' : 'none';
+    
+    // Atualizar contadores
+    updateCounters();
+    
+    // Resetar select all quando busca
+    document.getElementById('select_all_lectures').checked = false;
+});
+
+// Limpar busca
+document.getElementById('clear_search').addEventListener('click', function() {
+    const searchInput = document.getElementById('lecture_search');
+    searchInput.value = '';
+    searchInput.dispatchEvent(new Event('input'));
+    searchInput.focus();
+});
+
+// Controle de seleção múltipla de palestras (apenas visíveis)
+document.getElementById('select_all_lectures').addEventListener('change', function() {
+    const visibleCheckboxes = document.querySelectorAll('.lecture-card:not([style*="display: none"]) .lecture-checkbox');
+    visibleCheckboxes.forEach(checkbox => {
+        checkbox.checked = this.checked;
+    });
+    updateGenerateButton();
+});
+
+// Se qualquer checkbox individual for desmarcado, desmarcar o "Selecionar todas"
+document.querySelectorAll('.lecture-checkbox').forEach(checkbox => {
+    checkbox.addEventListener('change', function() {
+        const visibleCheckboxes = document.querySelectorAll('.lecture-card:not([style*="display: none"]) .lecture-checkbox');
+        const allVisibleChecked = Array.from(visibleCheckboxes).every(cb => cb.checked);
+        const anyVisibleChecked = Array.from(visibleCheckboxes).some(cb => cb.checked);
+        
+        document.getElementById('select_all_lectures').checked = allVisibleChecked && anyVisibleChecked;
+        updateGenerateButton();
+    });
+});
+
+function regenerateCertificate(certId, userName) {
+    document.getElementById('regenCertId').value = certId;
+    document.getElementById('regenUserName').textContent = userName;
+    document.getElementById('regenerateModal').style.display = 'block';
+}
+
+function deleteCertificate(certId, userName, lectureName) {
+    document.getElementById('deleteCertId').value = certId;
+    document.getElementById('deleteUserName').textContent = userName;
+    document.getElementById('deleteLectureName').textContent = lectureName;
+    document.getElementById('confirm_delete').value = '';
+    document.getElementById('deleteModal').style.display = 'block';
+}
+
+function closeModal(modalId) {
+    document.getElementById(modalId).style.display = 'none';
+}
+
+// Fechar modal ao clicar fora
+window.onclick = function(event) {
+    const modals = document.querySelectorAll('.modal');
+    modals.forEach(modal => {
+        if (event.target === modal) {
+            modal.style.display = 'none';
+        }
+    });
+}
+
+// Validação do formulário de delete
+document.getElementById('deleteForm').addEventListener('submit', function(e) {
+    const confirmText = document.getElementById('confirm_delete').value;
+    if (confirmText !== 'DELETE') {
+        e.preventDefault();
+        alert('Digite "DELETE" para confirmar a exclusão.');
+        return false;
+    }
+});
+
+// Validação do formulário de geração
+document.querySelector('form[method="POST"]').addEventListener('submit', function(e) {
+    if (e.submitter && e.submitter.name === 'generate_certificates') {
+        const selectedLectures = document.querySelectorAll('.lecture-checkbox:checked');
+        if (selectedLectures.length === 0) {
+            e.preventDefault();
+            alert('Selecione pelo menos uma palestra para gerar o certificado.');
+            return false;
+        }
+        
+        // Confirmação para múltiplos certificados
+        if (selectedLectures.length > 5) {
+            const userName = document.querySelector('#user_id option:checked').textContent;
+            if (!confirm(`Tem certeza que deseja gerar ${selectedLectures.length} certificados para ${userName}?\n\nOs emails serão enviados automaticamente.`)) {
+                e.preventDefault();
+                return false;
+            }
+        }
+    }
+});
+
+// Melhorar UX dos selects e inicialização
+document.addEventListener('DOMContentLoaded', function() {
+    const userSelect = document.getElementById('user_id');
+    
+    if (userSelect && userSelect.options.length <= 1) {
+        userSelect.innerHTML = '<option value="">Nenhum usuário encontrado</option>';
+        userSelect.disabled = true;
+    }
+    
+    const lectureCheckboxes = document.querySelectorAll('.lecture-checkbox');
+    if (lectureCheckboxes.length === 0) {
+        document.querySelector('.lectures-cards-grid').innerHTML = '<p style="color: rgba(255,255,255,0.7); padding: 20px; text-align: center;">Nenhuma palestra encontrada</p>';
+    }
+    
+    // Inicializar contadores
+    updateCounters();
+    updateGenerateButton();
+    
+    // Adicionar interatividade aos cards (clique fora do checkbox)
+    document.querySelectorAll('.lecture-card').forEach(card => {
+        card.addEventListener('click', function(e) {
+            // Não fazer nada se clicaram no checkbox ou label
+            if (e.target.type === 'checkbox' || e.target.tagName === 'LABEL' || e.target.closest('label')) {
+                return;
+            }
+            
+            const checkbox = this.querySelector('input[type="checkbox"]');
+            if (checkbox) {
+                checkbox.checked = !checkbox.checked;
+                checkbox.dispatchEvent(new Event('change'));
+            }
+        });
+    });
+});
+</script>
+
+<?php include __DIR__ . '/../vision/includes/footer.php'; ?>
