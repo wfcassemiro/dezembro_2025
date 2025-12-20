@@ -817,28 +817,28 @@ function useTemplate(type) {
 
 function useNextLectureTemplate() {
     if (nextLecture) {
-        let dateInfo = '';
-        if (nextLecture.date) {
-            dateInfo = `📅 Data: ${nextLecture.date}`;
-            if (nextLecture.time) {
-                dateInfo += ` às ${nextLecture.time}`;
-            }
-        }
+        // Preencher assunto
+        document.getElementById('subject').value = `🎬 ${nextLecture.title} - Hoje às ${nextLecture.time}h`;
         
-        document.getElementById('subject').value = `🎬 ${nextLecture.title} - Translators101`;
-        document.getElementById('message').value = `Olá [NOME],
+        // Preencher mensagem com o template
+        const message = `Olá!
 
-Temos uma palestra especial chegando!
+Hoje, ${nextLecture.date}, às ${nextLecture.time}h, teremos a palestra "${nextLecture.title}", com ${nextLecture.speaker}.
 
-📚 ${nextLecture.title}
-👤 Palestrante: ${nextLecture.speaker}
-${dateInfo}
+Descrição da palestra:
+[Adicione a descrição da palestra aqui]
 
-Não perca a oportunidade de participar e aprender com os melhores profissionais do mercado.
+A transmissão será no novo site da Translators101: translators101.com.
 
-Mais informações em: [LINK]
+Após fazer login, clique em "Ao vivo", no menu lateral. Entre uns 10 minutos antes, já estará rolando uma musiquinha. ;-)
 
-Equipe Translators101`;
+Se você ainda não registrou sua senha no nosso novo site, entre em contato pelo nosso WhatsApp (+55 19 98260 0771), até às 17h e ajudaremos a resolver rapidamente. Depois das 17h, não teremos como responder a tempo de liberar seu acesso.
+
+Um abraço.
+
+William Cassemiro`;
+        
+        document.getElementById('message').value = message;
         
         // Scroll para o formulário
         document.getElementById('emailForm').scrollIntoView({ behavior: 'smooth' });
