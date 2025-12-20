@@ -428,44 +428,6 @@ include __DIR__ . '/../vision/includes/sidebar.php';
     </div>
     <?php endif; ?>
     
-    <!-- Status, Teste e Info em 3 colunas -->
-    <div class="three-column-grid">
-        <!-- Status da Configuração -->
-        <div class="video-card glass-card">
-            <h3 class="section-title"><i class="fas fa-cog"></i> Status SMTP</h3>
-            <div class="config-status-mini <?php echo $email_configured ? 'configured' : 'not-configured'; ?>">
-                <i class="fas <?php echo $email_configured ? 'fa-check-circle' : 'fa-exclamation-triangle'; ?>"></i>
-                <span><?php echo $email_configured ? 'Configurado' : 'Não Configurado'; ?></span>
-            </div>
-            <?php if ($email_configured): ?>
-            <p class="smtp-info"><?php echo SMTP_HOST; ?>:<?php echo SMTP_PORT; ?></p>
-            <?php endif; ?>
-        </div>
-        
-        <!-- Teste de Email -->
-        <div class="video-card glass-card">
-            <h3 class="section-title"><i class="fas fa-flask"></i> Testar Email</h3>
-            <form method="POST" class="test-form">
-                <input type="hidden" name="action" value="test_email">
-                <input type="email" name="test_email" class="form-control" placeholder="seu@email.com" required>
-                <button type="submit" class="cta-btn btn-small" <?php echo !$email_configured ? 'disabled' : ''; ?>>
-                    <i class="fas fa-paper-plane"></i> Testar
-                </button>
-            </form>
-        </div>
-        
-        <!-- Remetente -->
-        <div class="video-card glass-card">
-            <h3 class="section-title"><i class="fas fa-user-circle"></i> Remetente</h3>
-            <?php if ($email_configured): ?>
-            <p class="sender-info"><?php echo SMTP_FROM_NAME; ?></p>
-            <p class="sender-email"><?php echo SMTP_FROM_EMAIL; ?></p>
-            <?php else: ?>
-            <p class="sender-info">Não configurado</p>
-            <?php endif; ?>
-        </div>
-    </div>
-    
     <!-- Estatísticas - 2 linhas, 3 cards cada -->
     <div class="video-card glass-card">
         <h3 class="section-title"><i class="fas fa-chart-bar"></i> Estatísticas</h3>
@@ -501,6 +463,44 @@ include __DIR__ . '/../vision/includes/sidebar.php';
         </div>
     </div>
     
+    <!-- Status SMTP, Teste de Email e Remetente - 3 cards na mesma linha -->
+    <div class="three-column-grid">
+        <!-- Status da Configuração -->
+        <div class="video-card glass-card compact-card">
+            <h3 class="section-title"><i class="fas fa-cog"></i> Status SMTP</h3>
+            <div class="config-status-mini <?php echo $email_configured ? 'configured' : 'not-configured'; ?>">
+                <i class="fas <?php echo $email_configured ? 'fa-check-circle' : 'fa-exclamation-triangle'; ?>"></i>
+                <span><?php echo $email_configured ? 'Configurado' : 'Não Configurado'; ?></span>
+            </div>
+            <?php if ($email_configured): ?>
+            <p class="smtp-info"><?php echo SMTP_HOST; ?>:<?php echo SMTP_PORT; ?></p>
+            <?php endif; ?>
+        </div>
+        
+        <!-- Teste de Email -->
+        <div class="video-card glass-card compact-card">
+            <h3 class="section-title"><i class="fas fa-flask"></i> Testar Email</h3>
+            <form method="POST" class="test-form">
+                <input type="hidden" name="action" value="test_email">
+                <input type="email" name="test_email" class="form-control" placeholder="seu@email.com" required>
+                <button type="submit" class="cta-btn btn-small" <?php echo !$email_configured ? 'disabled' : ''; ?>>
+                    <i class="fas fa-paper-plane"></i> Testar
+                </button>
+            </form>
+        </div>
+        
+        <!-- Remetente -->
+        <div class="video-card glass-card compact-card">
+            <h3 class="section-title"><i class="fas fa-user-circle"></i> Remetente</h3>
+            <?php if ($email_configured): ?>
+            <p class="sender-info"><?php echo SMTP_FROM_NAME; ?></p>
+            <p class="sender-email"><?php echo SMTP_FROM_EMAIL; ?></p>
+            <?php else: ?>
+            <p class="sender-info">Não configurado</p>
+            <?php endif; ?>
+        </div>
+    </div>
+    
     <!-- Próxima Palestra -->
     <?php if ($next_lecture): ?>
     <div class="video-card glass-card">
@@ -522,99 +522,108 @@ include __DIR__ . '/../vision/includes/sidebar.php';
     </div>
     <?php endif; ?>
     
-    <!-- Formulário de Envio -->
-    <div class="video-card glass-card">
-        <h3 class="section-title"><i class="fas fa-edit"></i> Enviar Novo E-mail</h3>
+    <!-- Enviar Novo Email e Emails Adicionais - 2 cards na mesma linha -->
+    <div class="two-column-grid">
+        <div class="video-card glass-card">
+            <h3 class="section-title"><i class="fas fa-edit"></i> Enviar Novo E-mail</h3>
+            <div class="form-group">
+                <label><i class="fas fa-users"></i> Tipo de Destinatários</label>
+                <select name="recipient_type" id="recipient_type" form="emailForm" class="form-control" onchange="toggleUserSelection()">
+                    <option value="all">Todos os Usuários (<?php echo $total_users; ?>)</option>
+                    <option value="subscribers">Apenas Assinantes (<?php echo $total_subscribers; ?>)</option>
+                    <option value="non_subscribers">Não Assinantes (<?php echo $total_users - $total_subscribers; ?>)</option>
+                    <option value="with_password">Com Senha (<?php echo $users_with_password; ?>)</option>
+                    <option value="without_password">Sem Senha (<?php echo $users_without_password; ?>)</option>
+                    <option value="selected">Selecionar da Lista</option>
+                    <option value="custom">Apenas Emails Personalizados</option>
+                </select>
+            </div>
+        </div>
         
-        <form method="POST" class="admin-form" id="emailForm">
-            <input type="hidden" name="action" value="send_email">
-            
-            <!-- Destinatários e Emails Personalizados - 2 colunas -->
+        <div class="video-card glass-card">
+            <h3 class="section-title"><i class="fas fa-at"></i> Emails Adicionais/Personalizados</h3>
+            <div class="form-group">
+                <label><i class="fas fa-envelope-open-text"></i> Emails Avulsos</label>
+                <textarea name="custom_emails" id="custom_emails" form="emailForm" class="form-control" rows="3" placeholder="email1@dominio.com, email2@dominio.com&#10;Separados por vírgula, espaço ou quebra de linha"></textarea>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Formulário Principal -->
+    <form method="POST" class="admin-form" id="emailForm">
+        <input type="hidden" name="action" value="send_email">
+        
+        <!-- Seleção Individual de Usuários -->
+        <div id="userSelectionContainer" class="video-card glass-card" style="display: none;">
+            <h3 class="section-title"><i class="fas fa-user-check"></i> Selecionar Usuários</h3>
             <div class="two-column-grid">
                 <div class="form-group">
-                    <label><i class="fas fa-users"></i> Tipo de Destinatários</label>
-                    <select name="recipient_type" id="recipient_type" class="form-control" onchange="toggleUserSelection()">
-                        <option value="all">Todos os Usuários (<?php echo $total_users; ?>)</option>
-                        <option value="subscribers">Apenas Assinantes (<?php echo $total_subscribers; ?>)</option>
-                        <option value="non_subscribers">Não Assinantes (<?php echo $total_users - $total_subscribers; ?>)</option>
-                        <option value="with_password">Com Senha Registrada (<?php echo $users_with_password; ?>)</option>
-                        <option value="without_password">Sem Senha Registrada (<?php echo $users_without_password; ?>)</option>
-                        <option value="selected">Selecionar da Lista</option>
-                        <option value="custom">Apenas Emails Personalizados</option>
+                    <label><i class="fas fa-search"></i> Buscar Usuário</label>
+                    <input type="text" id="userSearch" class="form-control" placeholder="Nome ou email...">
+                </div>
+                <div class="form-group">
+                    <label><i class="fas fa-filter"></i> Filtrar por Tipo</label>
+                    <select id="filterUserType" class="form-control" onchange="filterUsers()">
+                        <option value="">Todos</option>
+                        <option value="admin">Admins</option>
+                        <option value="assinante">Assinantes</option>
+                        <option value="free">Free</option>
                     </select>
                 </div>
-                
-                <div class="form-group">
-                    <label><i class="fas fa-at"></i> Emails Adicionais</label>
-                    <textarea name="custom_emails" id="custom_emails" class="form-control" rows="2" placeholder="email1@dominio.com, email2@dominio.com"></textarea>
-                </div>
             </div>
             
-            <!-- Seleção Individual de Usuários -->
-            <div id="userSelectionContainer" style="display: none;">
-                <div class="two-column-grid">
-                    <div class="form-group">
-                        <label><i class="fas fa-search"></i> Buscar Usuário</label>
-                        <input type="text" id="userSearch" class="form-control" placeholder="Nome ou email...">
-                    </div>
-                    <div class="form-group">
-                        <label><i class="fas fa-filter"></i> Filtrar por Tipo</label>
-                        <select id="filterUserType" class="form-control" onchange="filterUsers()">
-                            <option value="">Todos</option>
-                            <option value="admin">Admins</option>
-                            <option value="assinante">Assinantes</option>
-                            <option value="free">Free</option>
-                        </select>
-                    </div>
-                </div>
-                
-                <div class="selection-controls">
-                    <button type="button" class="btn-secondary" onclick="selectAllUsers()">
-                        <i class="fas fa-check-square"></i> Selecionar Visíveis
-                    </button>
-                    <button type="button" class="btn-secondary" onclick="deselectAllUsers()">
-                        <i class="fas fa-square"></i> Desmarcar
-                    </button>
-                    <span class="selected-count"><span id="selectedCount">0</span> selecionado(s)</span>
-                </div>
-                
-                <div class="users-list" id="usersList">
-                    <?php foreach ($all_users as $user): ?>
-                    <div class="user-item" 
-                         data-name="<?php echo strtolower(htmlspecialchars($user['name'])); ?>" 
-                         data-email="<?php echo strtolower(htmlspecialchars($user['email'])); ?>"
-                         data-type="<?php echo strtolower($user['user_type']); ?>">
-                        <label class="user-checkbox-label">
-                            <input type="checkbox" name="selected_users[]" value="<?php echo $user['id']; ?>" class="user-checkbox" onchange="updateSelectedCount()">
-                            <div class="user-info">
-                                <span class="user-name"><?php echo htmlspecialchars($user['name']); ?></span>
-                                <span class="user-email"><?php echo htmlspecialchars($user['email']); ?></span>
-                            </div>
-                            <span class="user-type-badge <?php echo strtolower($user['user_type']); ?>"><?php echo $user['user_type']; ?></span>
-                            <?php if ($user['has_password']): ?>
-                            <span class="password-badge has-password" title="Tem senha"><i class="fas fa-key"></i></span>
-                            <?php else: ?>
-                            <span class="password-badge no-password" title="Sem senha"><i class="fas fa-key"></i></span>
-                            <?php endif; ?>
-                        </label>
-                    </div>
-                    <?php endforeach; ?>
-                </div>
+            <div class="selection-controls">
+                <button type="button" class="btn-secondary" onclick="selectAllUsers()">
+                    <i class="fas fa-check-square"></i> Selecionar Visíveis
+                </button>
+                <button type="button" class="btn-secondary" onclick="deselectAllUsers()">
+                    <i class="fas fa-square"></i> Desmarcar
+                </button>
+                <span class="selected-count"><span id="selectedCount">0</span> selecionado(s)</span>
             </div>
             
-            <!-- Lote e Palestra - 2 colunas -->
-            <div class="two-column-grid">
+            <div class="users-list" id="usersList">
+                <?php foreach ($all_users as $user): ?>
+                <div class="user-item" 
+                     data-name="<?php echo strtolower(htmlspecialchars($user['name'])); ?>" 
+                     data-email="<?php echo strtolower(htmlspecialchars($user['email'])); ?>"
+                     data-type="<?php echo strtolower($user['user_type']); ?>">
+                    <label class="user-checkbox-label">
+                        <input type="checkbox" name="selected_users[]" value="<?php echo $user['id']; ?>" class="user-checkbox" onchange="updateSelectedCount()">
+                        <div class="user-info">
+                            <span class="user-name"><?php echo htmlspecialchars($user['name']); ?></span>
+                            <span class="user-email"><?php echo htmlspecialchars($user['email']); ?></span>
+                        </div>
+                        <span class="user-type-badge <?php echo strtolower($user['user_type']); ?>"><?php echo $user['user_type']; ?></span>
+                        <?php if ($user['has_password']): ?>
+                        <span class="password-badge has-password" title="Tem senha"><i class="fas fa-key"></i></span>
+                        <?php else: ?>
+                        <span class="password-badge no-password" title="Sem senha"><i class="fas fa-key"></i></span>
+                        <?php endif; ?>
+                    </label>
+                </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
+        
+        <!-- Tamanho do Lote e Palestra Agendada - 2 cards na mesma linha -->
+        <div class="two-column-grid">
+            <div class="video-card glass-card">
+                <h3 class="section-title"><i class="fas fa-layer-group"></i> Tamanho do Lote</h3>
                 <div class="form-group">
-                    <label><i class="fas fa-layer-group"></i> Tamanho do Lote</label>
+                    <label><i class="fas fa-cubes"></i> Emails por Lote</label>
                     <select name="batch_size" class="form-control">
                         <option value="25">25 emails/lote (seguro)</option>
                         <option value="50" selected>50 emails/lote (recomendado)</option>
                         <option value="100">100 emails/lote (rápido)</option>
                     </select>
                 </div>
-                
+            </div>
+            
+            <div class="video-card glass-card">
+                <h3 class="section-title"><i class="fas fa-chalkboard-teacher"></i> Palestra Agendada</h3>
                 <div class="form-group">
-                    <label><i class="fas fa-chalkboard-teacher"></i> Palestra Agendada</label>
+                    <label><i class="fas fa-video"></i> Selecionar Palestra</label>
                     <select name="lecture_id" id="lecture_id" class="form-control" onchange="fillLectureTemplate()">
                         <option value="">Selecione para preencher template...</option>
                         <?php foreach ($all_lectures as $lecture): ?>
@@ -630,27 +639,36 @@ include __DIR__ . '/../vision/includes/sidebar.php';
                     </select>
                 </div>
             </div>
-            
-            <!-- Assunto e Link - 2 colunas -->
-            <div class="two-column-grid">
+        </div>
+        
+        <!-- Assunto e Link de Acesso - 2 cards na mesma linha -->
+        <div class="two-column-grid">
+            <div class="video-card glass-card">
+                <h3 class="section-title"><i class="fas fa-heading"></i> Assunto do Email</h3>
                 <div class="form-group">
-                    <label><i class="fas fa-heading"></i> Assunto</label>
+                    <label><i class="fas fa-pen"></i> Assunto</label>
                     <input type="text" name="subject" id="subject" class="form-control" placeholder="Assunto do e-mail" required>
                 </div>
-                
+            </div>
+            
+            <div class="video-card glass-card">
+                <h3 class="section-title"><i class="fas fa-link"></i> Link de Acesso</h3>
                 <div class="form-group">
-                    <label><i class="fas fa-link"></i> Link de Acesso</label>
-                    <input type="url" name="access_link" id="access_link" class="form-control" placeholder="https://... (use [LINK] na mensagem)">
+                    <label><i class="fas fa-external-link-alt"></i> URL (use [LINK] na mensagem)</label>
+                    <input type="url" name="access_link" id="access_link" class="form-control" placeholder="https://...">
                 </div>
             </div>
-            
-            <!-- Mensagem -->
+        </div>
+        
+        <!-- Mensagem -->
+        <div class="video-card glass-card">
+            <h3 class="section-title"><i class="fas fa-align-left"></i> Mensagem</h3>
             <div class="form-group">
-                <label><i class="fas fa-align-left"></i> Mensagem</label>
-                <textarea name="message" id="message" class="form-control" rows="10" placeholder="Use [NOME] para nome e [LINK] para o link" required></textarea>
+                <label><i class="fas fa-envelope-open-text"></i> Corpo do Email (use [NOME] para nome e [LINK] para o link)</label>
+                <textarea name="message" id="message" class="form-control" rows="12" placeholder="Digite a mensagem do email aqui..." required></textarea>
             </div>
             
-            <div style="text-align: center; margin-top: 20px;">
+            <div class="form-actions">
                 <button type="submit" class="cta-btn" <?php echo !$email_configured ? 'disabled' : ''; ?>>
                     <i class="fas fa-paper-plane"></i> Enviar E-mails
                 </button>
@@ -658,15 +676,15 @@ include __DIR__ . '/../vision/includes/sidebar.php';
                     <i class="fas fa-save"></i> Salvar como Template
                 </button>
             </div>
-        </form>
-    </div>
+        </div>
+    </form>
     
     <!-- Templates Rápidos -->
     <div class="video-card glass-card">
         <h3 class="section-title">
             <i class="fas fa-magic"></i> Templates
             <button type="button" class="btn-edit-templates" onclick="openManageTemplatesModal()">
-                <i class="fas fa-cog"></i> Gerenciar
+                <i class="fas fa-edit"></i> Editar Templates
             </button>
         </h3>
         
@@ -771,27 +789,33 @@ include __DIR__ . '/../vision/includes/sidebar.php';
 
 <!-- Modal Gerenciar Templates -->
 <div id="manageTemplatesModal" class="modal">
-    <div class="modal-content glass-modal">
+    <div class="modal-content glass-modal modal-large">
         <span class="close" onclick="closeManageTemplatesModal()">&times;</span>
-        <h3><i class="fas fa-cog"></i> Gerenciar Templates Salvos</h3>
+        <h3><i class="fas fa-edit"></i> Editar Templates Salvos</h3>
         
         <?php if (empty($saved_templates)): ?>
         <p style="text-align: center; color: rgba(255,255,255,0.6); padding: 20px;">
-            Nenhum template salvo ainda.
+            Nenhum template salvo ainda. Use "Salvar como Template" para criar seus templates personalizados.
         </p>
         <?php else: ?>
         <div class="templates-list">
             <?php foreach ($saved_templates as $name => $template): ?>
-            <div class="template-item">
+            <div class="template-item" id="template-item-<?php echo md5($name); ?>">
                 <div class="template-info">
                     <strong><?php echo htmlspecialchars($name); ?></strong>
-                    <span><?php echo htmlspecialchars(substr($template['subject'], 0, 50)); ?></span>
+                    <span><?php echo htmlspecialchars(substr($template['subject'], 0, 50)); ?><?php echo strlen($template['subject']) > 50 ? '...' : ''; ?></span>
+                    <?php if (isset($template['updated_at'])): ?>
+                    <small>Atualizado: <?php echo date('d/m/Y H:i', strtotime($template['updated_at'])); ?></small>
+                    <?php endif; ?>
                 </div>
                 <div class="template-actions">
-                    <button type="button" class="btn-icon" onclick="editTemplate('<?php echo htmlspecialchars($name, ENT_QUOTES); ?>')" title="Editar">
+                    <button type="button" class="btn-icon btn-primary" onclick="editTemplate('<?php echo htmlspecialchars($name, ENT_QUOTES); ?>')" title="Editar">
                         <i class="fas fa-edit"></i>
                     </button>
-                    <form method="POST" style="display: inline;" onsubmit="return confirm('Excluir este template?')">
+                    <button type="button" class="btn-icon" onclick="useSavedTemplate('<?php echo htmlspecialchars($name, ENT_QUOTES); ?>'); closeManageTemplatesModal();" title="Usar">
+                        <i class="fas fa-play"></i>
+                    </button>
+                    <form method="POST" style="display: inline;" onsubmit="return confirm('Excluir o template &quot;<?php echo htmlspecialchars($name, ENT_QUOTES); ?>&quot;?')">
                         <input type="hidden" name="action" value="delete_template">
                         <input type="hidden" name="template_name" value="<?php echo htmlspecialchars($name); ?>">
                         <button type="submit" class="btn-icon btn-danger" title="Excluir">
@@ -890,7 +914,7 @@ function useTemplate(type) {
     if (defaultTemplates[type]) {
         document.getElementById('subject').value = defaultTemplates[type].subject;
         document.getElementById('message').value = defaultTemplates[type].message;
-        document.getElementById('emailForm').scrollIntoView({ behavior: 'smooth' });
+        document.getElementById('message').scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 }
 
@@ -898,7 +922,7 @@ function useSavedTemplate(name) {
     if (savedTemplates[name]) {
         document.getElementById('subject').value = savedTemplates[name].subject;
         document.getElementById('message').value = savedTemplates[name].message;
-        document.getElementById('emailForm').scrollIntoView({ behavior: 'smooth' });
+        document.getElementById('message').scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 }
 
@@ -932,7 +956,7 @@ Um abraço.
 
 William Cassemiro`;
     
-    document.getElementById('emailForm').scrollIntoView({ behavior: 'smooth' });
+    document.getElementById('message').scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
 function useNextLectureTemplate() {
@@ -955,7 +979,7 @@ Um abraço.
 
 William Cassemiro`;
         
-        document.getElementById('emailForm').scrollIntoView({ behavior: 'smooth' });
+        document.getElementById('message').scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 }
 
@@ -1064,7 +1088,7 @@ window.onclick = function(e) {
 </script>
 
 <style>
-/* Títulos das seções com gap */
+/* Títulos das seções com gap de 20px */
 .section-title {
     margin: 0 0 15px 0;
     padding-left: 20px;
@@ -1092,12 +1116,23 @@ window.onclick = function(e) {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
     gap: 20px;
-    margin-bottom: 15px;
+    margin-bottom: 20px;
 }
 
-/* Cards compactos */
+/* Cards compactos para 3 colunas */
+.compact-card {
+    padding: 15px 20px !important;
+}
+
+.compact-card .section-title {
+    margin-bottom: 12px;
+    font-size: 1rem;
+}
+
+/* Cards padrão */
 .video-card.glass-card {
     padding: 20px;
+    margin-bottom: 20px;
 }
 
 /* Status SMTP mini */
@@ -1105,9 +1140,10 @@ window.onclick = function(e) {
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 10px 15px;
+    padding: 8px 12px;
     border-radius: 8px;
     font-weight: 600;
+    font-size: 0.9rem;
 }
 
 .config-status-mini.configured {
@@ -1121,8 +1157,8 @@ window.onclick = function(e) {
 }
 
 .smtp-info {
-    margin: 10px 0 0 0;
-    font-size: 0.85rem;
+    margin: 8px 0 0 0;
+    font-size: 0.8rem;
     color: rgba(255,255,255,0.6);
     padding-left: 20px;
 }
@@ -1135,12 +1171,12 @@ window.onclick = function(e) {
 
 .test-form .form-control {
     flex: 1;
-    padding: 10px 12px;
+    padding: 8px 12px;
 }
 
 .btn-small {
-    padding: 10px 15px !important;
-    font-size: 0.9rem !important;
+    padding: 8px 12px !important;
+    font-size: 0.85rem !important;
 }
 
 /* Sender info */
@@ -1149,11 +1185,12 @@ window.onclick = function(e) {
     font-weight: 600;
     color: white;
     padding-left: 20px;
+    font-size: 0.95rem;
 }
 
 .sender-email {
     margin: 5px 0 0 0;
-    font-size: 0.85rem;
+    font-size: 0.8rem;
     color: rgba(255,255,255,0.6);
     padding-left: 20px;
 }
@@ -1172,7 +1209,7 @@ window.onclick = function(e) {
 
 .stat-item {
     text-align: center;
-    padding: 20px 15px;
+    padding: 18px 12px;
     background: rgba(142, 68, 173, 0.2);
     border-radius: 12px;
     border: 1px solid rgba(142, 68, 173, 0.3);
@@ -1206,13 +1243,13 @@ window.onclick = function(e) {
 }
 
 .stat-number {
-    font-size: 2rem;
+    font-size: 1.8rem;
     font-weight: bold;
     color: #c084fc;
 }
 
 .stat-label {
-    font-size: 0.85rem;
+    font-size: 0.8rem;
     color: rgba(255, 255, 255, 0.7);
     margin-top: 5px;
 }
@@ -1252,6 +1289,7 @@ window.onclick = function(e) {
     font-weight: 600;
     color: white;
     font-size: 0.9rem;
+    padding-left: 20px;
 }
 
 .form-group label i {
@@ -1267,6 +1305,7 @@ window.onclick = function(e) {
     font-size: 0.95rem;
     background: rgba(0, 0, 0, 0.3);
     color: white;
+    box-sizing: border-box;
 }
 
 .form-control:focus {
@@ -1277,7 +1316,15 @@ window.onclick = function(e) {
 
 textarea.form-control {
     resize: vertical;
-    min-height: 150px;
+    min-height: 120px;
+}
+
+/* Form actions */
+.form-actions {
+    text-align: center;
+    margin-top: 20px;
+    padding-top: 15px;
+    border-top: 1px solid rgba(255,255,255,0.1);
 }
 
 /* Selection controls */
@@ -1286,7 +1333,7 @@ textarea.form-control {
     gap: 10px;
     align-items: center;
     margin: 10px 0;
-    padding: 10px;
+    padding: 10px 20px;
     background: rgba(0,0,0,0.2);
     border-radius: 8px;
 }
@@ -1315,7 +1362,6 @@ textarea.form-control {
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 8px;
     background: rgba(0, 0, 0, 0.2);
-    margin-bottom: 15px;
 }
 
 .user-item {
@@ -1406,13 +1452,19 @@ textarea.form-control {
 
 .btn-edit-templates {
     margin-left: auto;
-    padding: 5px 10px;
-    background: rgba(255,255,255,0.1);
-    border: 1px solid rgba(255,255,255,0.2);
+    padding: 6px 12px;
+    background: rgba(192, 132, 252, 0.2);
+    border: 1px solid rgba(192, 132, 252, 0.4);
     border-radius: 6px;
-    color: rgba(255,255,255,0.7);
+    color: #c084fc;
     cursor: pointer;
-    font-size: 0.8rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    transition: all 0.2s;
+}
+
+.btn-edit-templates:hover {
+    background: rgba(192, 132, 252, 0.3);
 }
 
 /* CTA buttons */
@@ -1481,9 +1533,14 @@ textarea.form-control {
     position: relative;
 }
 
+.modal-content.modal-large {
+    max-width: 600px;
+}
+
 .modal-content h3 {
     color: #c084fc;
     margin: 0 0 20px 0;
+    padding-left: 20px;
 }
 
 .close {
@@ -1504,7 +1561,7 @@ textarea.form-control {
 
 /* Templates list */
 .templates-list {
-    max-height: 300px;
+    max-height: 400px;
     overflow-y: auto;
 }
 
@@ -1512,20 +1569,34 @@ textarea.form-control {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 12px;
+    padding: 15px;
     background: rgba(0,0,0,0.2);
     border-radius: 8px;
     margin-bottom: 10px;
+    border: 1px solid rgba(255,255,255,0.05);
+}
+
+.template-info {
+    flex: 1;
 }
 
 .template-info strong {
     display: block;
     color: white;
+    margin-bottom: 4px;
 }
 
 .template-info span {
     font-size: 0.85rem;
     color: rgba(255,255,255,0.5);
+    display: block;
+}
+
+.template-info small {
+    font-size: 0.75rem;
+    color: rgba(255,255,255,0.4);
+    display: block;
+    margin-top: 4px;
 }
 
 .template-actions {
@@ -1534,13 +1605,27 @@ textarea.form-control {
 }
 
 .btn-icon {
-    width: 32px;
-    height: 32px;
+    width: 34px;
+    height: 34px;
     border: none;
     border-radius: 6px;
     background: rgba(255,255,255,0.1);
     color: white;
     cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-icon:hover {
+    background: rgba(255,255,255,0.2);
+}
+
+.btn-icon.btn-primary {
+    background: rgba(192, 132, 252, 0.2);
+    color: #c084fc;
+}
+
+.btn-icon.btn-primary:hover {
+    background: rgba(192, 132, 252, 0.3);
 }
 
 .btn-icon.btn-danger {
@@ -1548,10 +1633,22 @@ textarea.form-control {
     color: #ef4444;
 }
 
+.btn-icon.btn-danger:hover {
+    background: rgba(239, 68, 68, 0.3);
+}
+
 /* Responsive */
 @media (max-width: 992px) {
-    .three-column-grid, .stats-row {
+    .three-column-grid {
         grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .three-column-grid > *:last-child {
+        grid-column: span 2;
+    }
+    
+    .stats-row {
+        grid-template-columns: repeat(3, 1fr);
     }
     
     .quick-actions-grid {
@@ -1564,6 +1661,10 @@ textarea.form-control {
         grid-template-columns: 1fr;
     }
     
+    .three-column-grid > *:last-child {
+        grid-column: span 1;
+    }
+    
     .quick-actions-grid {
         grid-template-columns: repeat(3, 1fr);
     }
@@ -1571,6 +1672,16 @@ textarea.form-control {
     .next-lecture-info {
         flex-direction: column;
         text-align: center;
+    }
+    
+    .form-actions {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+    
+    .btn-secondary-large {
+        margin-left: 0;
     }
 }
 </style>
