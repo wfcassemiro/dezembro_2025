@@ -273,7 +273,7 @@ try {
 // Buscar TODAS as palestras agendadas para o dropdown (upcoming_announcements)
 try {
     $stmt = $pdo->query("
-        SELECT id, title, speaker, announcement_date, lecture_time
+        SELECT id, title, speaker, announcement_date, lecture_time, description
         FROM upcoming_announcements 
         WHERE is_active = 1
         ORDER BY announcement_date DESC
