@@ -254,40 +254,33 @@ try {
     error_log("[Emails] " . end($db_errors));
 }
 
-// Buscar próxima palestra agendada
+// Buscar próxima palestra agendada (da tabela upcoming_announcements)
 try {
-    // Primeiro tentar a tabela upcoming_announcements
     $stmt = $pdo->query("
-        SELECT l.id, l.title, l.speaker, l.description, ua.announcement_date, ua.announcement_time 
-        FROM upcoming_announcements ua
-        INNER JOIN lectures l ON l.id = ua.lecture_id
-        WHERE ua.announcement_date >= CURDATE() 
-        ORDER BY ua.announcement_date ASC, ua.announcement_time ASC 
+        SELECT id, title, speaker, description, announcement_date, lecture_time, image_path
+        FROM upcoming_announcements 
+        WHERE announcement_date >= CURDATE() 
+        AND is_active = 1
+        ORDER BY announcement_date ASC, lecture_time ASC 
         LIMIT 1
     ");
     $next_lecture = $stmt->fetch();
 } catch (PDOException $e) {
-    $db_errors[] = "Erro ao buscar palestra agendada (upcoming_announcements): " . $e->getMessage();
+    $db_errors[] = "Erro ao buscar palestra agendada: " . $e->getMessage();
     error_log("[Emails] " . end($db_errors));
 }
 
-// Se não encontrou em upcoming_announcements, buscar em lectures com is_live
-if (!$next_lecture) {
-    try {
-        $stmt = $pdo->query("SELECT id, title, speaker, description FROM lectures WHERE is_live = 1 ORDER BY created_at DESC LIMIT 1");
-        $next_lecture = $stmt->fetch();
-    } catch (PDOException $e) {
-        $db_errors[] = "Erro ao buscar palestra ao vivo: " . $e->getMessage();
-        error_log("[Emails] " . end($db_errors));
-    }
-}
-
-// Buscar todas as palestras para o dropdown
+// Buscar TODAS as palestras agendadas para o dropdown (upcoming_announcements)
 try {
-    $stmt = $pdo->query("SELECT id, title, speaker FROM lectures ORDER BY title ASC");
+    $stmt = $pdo->query("
+        SELECT id, title, speaker, announcement_date, lecture_time
+        FROM upcoming_announcements 
+        WHERE is_active = 1
+        ORDER BY announcement_date DESC
+    ");
     $all_lectures = $stmt->fetchAll() ?: [];
 } catch (PDOException $e) {
-    $db_errors[] = "Erro ao buscar palestras: " . $e->getMessage();
+    $db_errors[] = "Erro ao buscar palestras agendadas: " . $e->getMessage();
     error_log("[Emails] " . end($db_errors));
 }
 
