@@ -1,65 +1,209 @@
 <?php
 /**
- * Configurações de Email - SMTP
- * Sistema de envio de emails da Translators101
+ * Sistema de Email com PHPMailer via SMTP
+ * Translators101 - Sistema de Certificados
  * 
- * ARQUIVO CORRIGIDO - Sistema de email funcionando
+ * REQUER: PHPMailer instalado via Composer
+ * composer require phpmailer/phpmailer
  */
 
-// Incluir configurações se ainda não foram incluídas
+// Incluir configurações SMTP
 if (!defined('SMTP_HOST')) {
     require_once __DIR__ . '/email_config.php';
 }
 
+// Carregar PHPMailer via Composer autoload
+// Ajuste o caminho conforme a estrutura do seu projeto
+$autoload_paths = [
+    __DIR__ . '/vendor/autoload.php',
+    __DIR__ . '/../vendor/autoload.php',
+    __DIR__ . '/../../vendor/autoload.php',
+    dirname(__DIR__) . '/vendor/autoload.php',
+];
+
+$autoload_loaded = false;
+foreach ($autoload_paths as $path) {
+    if (file_exists($path)) {
+        require_once $path;
+        $autoload_loaded = true;
+        break;
+    }
+}
+
+if (!$autoload_loaded) {
+    error_log("[Email] AVISO: autoload.php não encontrado. Instale PHPMailer: composer require phpmailer/phpmailer");
+}
+
+use PHPMailer\PHPMailer\PHPMailer;
+use PHPMailer\PHPMailer\SMTP;
+use PHPMailer\PHPMailer\Exception;
+
 /**
- * Classe para envio de emails via SMTP
+ * Classe para envio de emails via PHPMailer/SMTP
  */
 class EmailSender {
     private $smtp_host;
     private $smtp_port;
+    private $smtp_secure;
     private $smtp_username;
     private $smtp_password;
     private $from_email;
     private $from_name;
+    private $debug_level;
     
     public function __construct() {
         $this->smtp_host = SMTP_HOST;
         $this->smtp_port = SMTP_PORT;
+        $this->smtp_secure = defined('SMTP_SECURE') ? SMTP_SECURE : 'tls';
         $this->smtp_username = SMTP_USERNAME;
         $this->smtp_password = SMTP_PASSWORD;
         $this->from_email = SMTP_FROM_EMAIL;
-        $this->from_name = SMTP_FROM_NAME;
+        $this->from_name = defined('SMTP_FROM_NAME') ? SMTP_FROM_NAME : 'Translators101';
+        $this->debug_level = defined('SMTP_DEBUG') ? SMTP_DEBUG : 0;
     }
     
     /**
      * Verificar se PHPMailer está disponível
+     * @return bool
      */
-    private function isPHPMailerAvailable() {
+    public function isPHPMailerAvailable() {
         return class_exists('PHPMailer\PHPMailer\PHPMailer');
     }
     
     /**
-     * Enviar email usando PHPMailer (se disponível) ou mail() nativo
+     * Enviar email usando PHPMailer via SMTP
+     * 
+     * @param string $to Email do destinatário
+     * @param string $to_name Nome do destinatário
+     * @param string $subject Assunto
+     * @param string $html_content Conteúdo HTML
+     * @param string $text_content Conteúdo texto (opcional)
+     * @return bool
      */
     public function sendEmail($to, $to_name, $subject, $html_content, $text_content = '') {
-        // Log de tentativa de envio
-        error_log("[EmailSender] Tentando enviar email para: $to");
+        // Verificar se PHPMailer está disponível
+        if (!$this->isPHPMailerAvailable()) {
+            error_log("[EmailSender] ERRO: PHPMailer não está instalado!");
+            error_log("[EmailSender] Execute: composer require phpmailer/phpmailer");
+            return false;
+        }
         
-        if ($this->isPHPMailerAvailable()) {
-            error_log("[EmailSender] Usando PHPMailer");
-            return $this->sendWithPHPMailer($to, $to_name, $subject, $html_content, $text_content);
-        } else {
-            error_log("[EmailSender] PHPMailer não disponível, usando método alternativo");
-            return $this->sendWithSocketSMTP($to, $to_name, $subject, $html_content, $text_content);
+        // Verificar configuração
+        if (!isEmailConfigured()) {
+            error_log("[EmailSender] ERRO: Configurações SMTP incompletas em email_config.php");
+            return false;
+        }
+        
+        error_log("[EmailSender] Enviando email para: $to via SMTP ({$this->smtp_host}:{$this->smtp_port})");
+        
+        try {
+            $mail = new PHPMailer(true);
+            
+            // ================================
+            // CONFIGURAÇÕES DO SERVIDOR SMTP
+            // ================================
+            
+            // Nível de debug (0 = off, 1 = client, 2 = client+server)
+            $mail->SMTPDebug = $this->debug_level;
+            
+            // Usar SMTP
+            $mail->isSMTP();
+            
+            // Servidor SMTP
+            $mail->Host = $this->smtp_host;
+            
+            // Autenticação SMTP
+            $mail->SMTPAuth = true;
+            $mail->Username = $this->smtp_username;
+            $mail->Password = $this->smtp_password;
+            
+            // Criptografia (TLS ou SSL)
+            if ($this->smtp_secure === 'ssl' || $this->smtp_port == 465) {
+                $mail->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS; // SSL
+            } else {
+                $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS; // TLS
+            }
+            
+            // Porta SMTP
+            $mail->Port = $this->smtp_port;
+            
+            // Charset
+            $mail->CharSet = defined('EMAIL_CHARSET') ? EMAIL_CHARSET : 'UTF-8';
+            
+            // Timeout
+            $mail->Timeout = 30;
+            
+            // ================================
+            // CONFIGURAÇÕES DO EMAIL
+            // ================================
+            
+            // Remetente
+            $mail->setFrom($this->from_email, $this->from_name);
+            
+            // Reply-To (opcional)
+            $mail->addReplyTo($this->from_email, $this->from_name);
+            
+            // Destinatário
+            $mail->addAddress($to, $to_name);
+            
+            // Formato HTML
+            $mail->isHTML(true);
+            
+            // Assunto
+            $mail->Subject = $subject;
+            
+            // Corpo HTML
+            $mail->Body = $html_content;
+            
+            // Corpo alternativo (texto puro)
+            if (!empty($text_content)) {
+                $mail->AltBody = $text_content;
+            } else {
+                // Gerar versão texto a partir do HTML
+                $mail->AltBody = strip_tags(
+                    str_replace(
+                        ['<br>', '<br/>', '<br />', '</p>', '</div>', '</li>'],
+                        ["\n", "\n", "\n", "\n\n", "\n", "\n"],
+                        $html_content
+                    )
+                );
+            }
+            
+            // ================================
+            // ENVIAR
+            // ================================
+            
+            $result = $mail->send();
+            
+            if ($result) {
+                error_log("[EmailSender] ✓ Email enviado com sucesso para: $to");
+            }
+            
+            return $result;
+            
+        } catch (Exception $e) {
+            error_log("[EmailSender] ✗ Erro ao enviar email para $to: " . $mail->ErrorInfo);
+            error_log("[EmailSender] Detalhes: " . $e->getMessage());
+            return false;
         }
     }
     
     /**
-     * Enviar email usando PHPMailer
+     * Enviar email com anexo
      */
-    private function sendWithPHPMailer($to, $to_name, $subject, $html_content, $text_content) {
+    public function sendEmailWithAttachment($to, $to_name, $subject, $html_content, $attachment_path, $attachment_name = '') {
+        if (!$this->isPHPMailerAvailable()) {
+            error_log("[EmailSender] ERRO: PHPMailer não está instalado!");
+            return false;
+        }
+        
+        if (!file_exists($attachment_path)) {
+            error_log("[EmailSender] ERRO: Anexo não encontrado: $attachment_path");
+            return false;
+        }
+        
         try {
-            $mail = new PHPMailer\PHPMailer\PHPMailer(true);
+            $mail = new PHPMailer(true);
             
             // Configurações SMTP
             $mail->isSMTP();
@@ -67,12 +211,9 @@ class EmailSender {
             $mail->SMTPAuth = true;
             $mail->Username = $this->smtp_username;
             $mail->Password = $this->smtp_password;
-            $mail->SMTPSecure = PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;
+            $mail->SMTPSecure = ($this->smtp_secure === 'ssl') ? PHPMailer::ENCRYPTION_SMTPS : PHPMailer::ENCRYPTION_STARTTLS;
             $mail->Port = $this->smtp_port;
-            $mail->CharSet = EMAIL_CHARSET;
-            
-            // Debug (descomente para depuração)
-            // $mail->SMTPDebug = 2;
+            $mail->CharSet = 'UTF-8';
             
             // Configurações do email
             $mail->setFrom($this->from_email, $this->from_name);
@@ -81,209 +222,65 @@ class EmailSender {
             $mail->Subject = $subject;
             $mail->Body = $html_content;
             
-            if (!empty($text_content)) {
-                $mail->AltBody = $text_content;
-            } else {
-                $mail->AltBody = strip_tags(str_replace(['<br>', '<br/>', '<br />'], "\n", $html_content));
-            }
+            // Anexo
+            $mail->addAttachment($attachment_path, $attachment_name ?: basename($attachment_path));
             
-            $result = $mail->send();
-            error_log("[EmailSender] PHPMailer enviou com sucesso para: $to");
-            return $result;
+            return $mail->send();
             
         } catch (Exception $e) {
-            error_log("[EmailSender] Erro PHPMailer: " . $e->getMessage());
-            return false;
-        }
-    }
-    
-    /**
-     * Enviar email usando SMTP via socket (fallback sem PHPMailer)
-     */
-    private function sendWithSocketSMTP($to, $to_name, $subject, $html_content, $text_content) {
-        try {
-            // Tentar conexão SMTP direta
-            $socket = @fsockopen($this->smtp_host, $this->smtp_port, $errno, $errstr, 30);
-            
-            if (!$socket) {
-                error_log("[EmailSender] Não foi possível conectar ao SMTP: $errstr ($errno)");
-                // Fallback para mail() nativo
-                return $this->sendWithNativeMail($to, $to_name, $subject, $html_content, $text_content);
-            }
-            
-            // Ler resposta inicial
-            $this->getResponse($socket);
-            
-            // EHLO
-            fwrite($socket, "EHLO " . gethostname() . "\r\n");
-            $this->getResponse($socket);
-            
-            // STARTTLS
-            fwrite($socket, "STARTTLS\r\n");
-            $response = $this->getResponse($socket);
-            
-            if (strpos($response, '220') !== false) {
-                // Upgrade para TLS
-                stream_socket_enable_crypto($socket, true, STREAM_CRYPTO_METHOD_TLS_CLIENT);
-                
-                // EHLO novamente após TLS
-                fwrite($socket, "EHLO " . gethostname() . "\r\n");
-                $this->getResponse($socket);
-            }
-            
-            // AUTH LOGIN
-            fwrite($socket, "AUTH LOGIN\r\n");
-            $this->getResponse($socket);
-            
-            fwrite($socket, base64_encode($this->smtp_username) . "\r\n");
-            $this->getResponse($socket);
-            
-            fwrite($socket, base64_encode($this->smtp_password) . "\r\n");
-            $auth_response = $this->getResponse($socket);
-            
-            if (strpos($auth_response, '235') === false) {
-                error_log("[EmailSender] Falha na autenticação SMTP");
-                fclose($socket);
-                return $this->sendWithNativeMail($to, $to_name, $subject, $html_content, $text_content);
-            }
-            
-            // MAIL FROM
-            fwrite($socket, "MAIL FROM:<{$this->from_email}>\r\n");
-            $this->getResponse($socket);
-            
-            // RCPT TO
-            fwrite($socket, "RCPT TO:<$to>\r\n");
-            $this->getResponse($socket);
-            
-            // DATA
-            fwrite($socket, "DATA\r\n");
-            $this->getResponse($socket);
-            
-            // Headers e corpo do email
-            $headers = "From: {$this->from_name} <{$this->from_email}>\r\n";
-            $headers .= "To: $to_name <$to>\r\n";
-            $headers .= "Subject: $subject\r\n";
-            $headers .= "MIME-Version: 1.0\r\n";
-            $headers .= "Content-Type: text/html; charset=UTF-8\r\n";
-            $headers .= "\r\n";
-            $headers .= $html_content;
-            $headers .= "\r\n.\r\n";
-            
-            fwrite($socket, $headers);
-            $data_response = $this->getResponse($socket);
-            
-            // QUIT
-            fwrite($socket, "QUIT\r\n");
-            fclose($socket);
-            
-            if (strpos($data_response, '250') !== false) {
-                error_log("[EmailSender] Email enviado via SMTP Socket para: $to");
-                return true;
-            }
-            
-            return false;
-            
-        } catch (Exception $e) {
-            error_log("[EmailSender] Erro SMTP Socket: " . $e->getMessage());
-            return $this->sendWithNativeMail($to, $to_name, $subject, $html_content, $text_content);
-        }
-    }
-    
-    /**
-     * Obter resposta do servidor SMTP
-     */
-    private function getResponse($socket) {
-        $response = '';
-        while ($str = fgets($socket, 515)) {
-            $response .= $str;
-            if (substr($str, 3, 1) == ' ') break;
-        }
-        return $response;
-    }
-    
-    /**
-     * Enviar email usando função mail() nativa do PHP (último fallback)
-     */
-    private function sendWithNativeMail($to, $to_name, $subject, $html_content, $text_content) {
-        try {
-            // Headers
-            $headers = [];
-            $headers[] = 'MIME-Version: 1.0';
-            $headers[] = 'Content-Type: text/html; charset=UTF-8';
-            $headers[] = 'From: ' . $this->from_name . ' <' . $this->from_email . '>';
-            $headers[] = 'Reply-To: ' . $this->from_email;
-            $headers[] = 'X-Mailer: PHP/' . phpversion();
-            $headers[] = 'X-Priority: 3';
-            
-            $headers_string = implode("\r\n", $headers);
-            
-            // Destinatário formatado
-            $to_formatted = $to_name ? "$to_name <$to>" : $to;
-            
-            // Enviar
-            $result = mail($to_formatted, $subject, $html_content, $headers_string);
-            
-            if ($result) {
-                error_log("[EmailSender] Email enviado via mail() para: $to");
-            } else {
-                error_log("[EmailSender] Falha ao enviar via mail() para: $to");
-            }
-            
-            return $result;
-            
-        } catch (Exception $e) {
-            error_log("[EmailSender] Erro mail(): " . $e->getMessage());
+            error_log("[EmailSender] Erro com anexo: " . $e->getMessage());
             return false;
         }
     }
 }
 
 /**
- * Templates de Email
+ * Templates de Email HTML
  */
 class EmailTemplates {
+    
     /**
-     * Template base HTML
+     * Template base com header e footer
      */
     public static function getBaseTemplate($title, $content) {
         return '
-        <!DOCTYPE html>
-        <html lang="pt-BR">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>' . htmlspecialchars($title) . '</title>
-        </head>
-        <body style="margin: 0; padding: 0; font-family: \'Segoe UI\', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f4f4;">
-            <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f4f4f4; padding: 20px 0;">
-                <tr>
-                    <td align="center">
-                        <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 10px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
-                            <!-- Header -->
-                            <tr>
-                                <td style="background: linear-gradient(135deg, #8e44ad, #9b59b6); padding: 30px; text-align: center;">
-                                    <h1 style="color: #ffffff; margin: 0; font-size: 24px;">🎓 Translators101</h1>
-                                </td>
-                            </tr>
-                            <!-- Content -->
-                            <tr>
-                                <td style="padding: 30px; color: #333333; line-height: 1.6;">
-                                    ' . $content . '
-                                </td>
-                            </tr>
-                            <!-- Footer -->
-                            <tr>
-                                <td style="background-color: #f8f9fa; padding: 20px; text-align: center; color: #666666; font-size: 12px;">
-                                    <p style="margin: 0;">© ' . date('Y') . ' Translators101 - Educação Continuada</p>
-                                    <p style="margin: 5px 0 0 0;">Este é um email automático, não responda.</p>
-                                </td>
-                            </tr>
-                        </table>
-                    </td>
-                </tr>
-            </table>
-        </body>
-        </html>';
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>' . htmlspecialchars($title) . '</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: \'Segoe UI\', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f4f4;">
+    <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f4f4f4; padding: 20px 0;">
+        <tr>
+            <td align="center">
+                <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 10px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+                    <!-- Header -->
+                    <tr>
+                        <td style="background: linear-gradient(135deg, #8e44ad, #9b59b6); padding: 30px; text-align: center;">
+                            <h1 style="color: #ffffff; margin: 0; font-size: 24px;">🎓 Translators101</h1>
+                        </td>
+                    </tr>
+                    <!-- Content -->
+                    <tr>
+                        <td style="padding: 30px; color: #333333; line-height: 1.6;">
+                            ' . $content . '
+                        </td>
+                    </tr>
+                    <!-- Footer -->
+                    <tr>
+                        <td style="background-color: #f8f9fa; padding: 20px; text-align: center; color: #666666; font-size: 12px;">
+                            <p style="margin: 0;">© ' . date('Y') . ' Translators101 - Educação Continuada</p>
+                            <p style="margin: 5px 0 0 0;">Este é um email automático, não responda.</p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>';
     }
     
     /**
@@ -406,96 +403,13 @@ class EmailTemplates {
      * Template personalizado
      */
     public static function getCustomEmailTemplate($subject, $content) {
-        return self::getBaseTemplate($subject, $content);
+        return self::getBaseTemplate($subject, '<div style="white-space: pre-wrap;">' . $content . '</div>');
     }
 }
 
 // ============================================
-// FUNÇÕES DE ENVIO DE EMAIL
+// FUNÇÕES HELPER PARA ENVIO DE EMAIL
 // ============================================
-
-/**
- * Enviar email de definição de senha
- */
-function sendPasswordSetupEmail($email, $name, $reset_token) {
-    try {
-        $protocol = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') ? 'https' : 'http';
-        $host = $_SERVER['HTTP_HOST'] ?? 'translators101.com';
-        $reset_link = "{$protocol}://{$host}/definir_senha.php?token={$reset_token}";
-        
-        $emailSender = new EmailSender();
-        $subject = "🔑 Defina sua senha - Translators101";
-        $html_content = EmailTemplates::getPasswordSetupTemplate($name, $reset_link);
-        
-        $result = $emailSender->sendEmail($email, $name, $subject, $html_content);
-        
-        if ($result) {
-            error_log("[T101] Email de senha enviado para: $email");
-        } else {
-            error_log("[T101] Falha ao enviar email de senha para: $email");
-        }
-        
-        return $result;
-        
-    } catch (Exception $e) {
-        error_log("[T101] Erro ao enviar email de senha: " . $e->getMessage());
-        return false;
-    }
-}
-
-/**
- * Enviar email de boas-vindas Hotmart
- */
-function sendWelcomeHotmartEmail($email, $name, $reset_token) {
-    try {
-        $protocol = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') ? 'https' : 'http';
-        $host = $_SERVER['HTTP_HOST'] ?? 'translators101.com';
-        $reset_link = "{$protocol}://{$host}/definir_senha.php?token={$reset_token}";
-        
-        $emailSender = new EmailSender();
-        $subject = "🎉 Boas-vindas à Translators101 - Acesso liberado!";
-        $html_content = EmailTemplates::getWelcomeHotmartTemplate($name, $reset_link);
-        
-        $result = $emailSender->sendEmail($email, $name, $subject, $html_content);
-        
-        if ($result) {
-            error_log("[T101] Email de boas-vindas enviado para: $email");
-        } else {
-            error_log("[T101] Falha ao enviar email de boas-vindas para: $email");
-        }
-        
-        return $result;
-        
-    } catch (Exception $e) {
-        error_log("[T101] Erro ao enviar email de boas-vindas: " . $e->getMessage());
-        return false;
-    }
-}
-
-/**
- * Enviar notificação de senha alterada
- */
-function sendPasswordChangedEmail($email, $name) {
-    try {
-        $emailSender = new EmailSender();
-        $subject = "✅ Senha definida com sucesso - Translators101";
-        $html_content = EmailTemplates::getPasswordChangedTemplate($name);
-        
-        $result = $emailSender->sendEmail($email, $name, $subject, $html_content);
-        
-        if ($result) {
-            error_log("[T101] Email de confirmação enviado para: $email");
-        } else {
-            error_log("[T101] Falha ao enviar email de confirmação para: $email");
-        }
-        
-        return $result;
-        
-    } catch (Exception $e) {
-        error_log("[T101] Erro ao enviar email de confirmação: " . $e->getMessage());
-        return false;
-    }
-}
 
 /**
  * Enviar email de certificado
@@ -513,18 +427,69 @@ function sendCertificateEmail($email, $name, $certificate_id, $lecture_title) {
         $subject = "🎓 Seu Certificado T101 - " . $lecture_title;
         $html_content = EmailTemplates::getCertificateTemplate($name, $lecture_title, $certificate_id, $view_url, $download_url, $verification_url);
         
-        $result = $emailSender->sendEmail($email, $name, $subject, $html_content);
-        
-        if ($result) {
-            error_log("[T101] Email de certificado enviado para: $email");
-        } else {
-            error_log("[T101] Falha ao enviar email de certificado para: $email");
-        }
-        
-        return $result;
+        return $emailSender->sendEmail($email, $name, $subject, $html_content);
         
     } catch (Exception $e) {
-        error_log("[T101] Erro ao enviar email de certificado: " . $e->getMessage());
+        error_log("[Email] Erro ao enviar certificado: " . $e->getMessage());
+        return false;
+    }
+}
+
+/**
+ * Enviar email de definição de senha
+ */
+function sendPasswordSetupEmail($email, $name, $reset_token) {
+    try {
+        $protocol = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') ? 'https' : 'http';
+        $host = $_SERVER['HTTP_HOST'] ?? 'translators101.com';
+        $reset_link = "{$protocol}://{$host}/definir_senha.php?token={$reset_token}";
+        
+        $emailSender = new EmailSender();
+        $subject = "🔑 Defina sua senha - Translators101";
+        $html_content = EmailTemplates::getPasswordSetupTemplate($name, $reset_link);
+        
+        return $emailSender->sendEmail($email, $name, $subject, $html_content);
+        
+    } catch (Exception $e) {
+        error_log("[Email] Erro ao enviar senha: " . $e->getMessage());
+        return false;
+    }
+}
+
+/**
+ * Enviar email de boas-vindas Hotmart
+ */
+function sendWelcomeHotmartEmail($email, $name, $reset_token) {
+    try {
+        $protocol = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') ? 'https' : 'http';
+        $host = $_SERVER['HTTP_HOST'] ?? 'translators101.com';
+        $reset_link = "{$protocol}://{$host}/definir_senha.php?token={$reset_token}";
+        
+        $emailSender = new EmailSender();
+        $subject = "🎉 Boas-vindas à Translators101 - Acesso liberado!";
+        $html_content = EmailTemplates::getWelcomeHotmartTemplate($name, $reset_link);
+        
+        return $emailSender->sendEmail($email, $name, $subject, $html_content);
+        
+    } catch (Exception $e) {
+        error_log("[Email] Erro ao enviar boas-vindas: " . $e->getMessage());
+        return false;
+    }
+}
+
+/**
+ * Enviar notificação de senha alterada
+ */
+function sendPasswordChangedEmail($email, $name) {
+    try {
+        $emailSender = new EmailSender();
+        $subject = "✅ Senha definida com sucesso - Translators101";
+        $html_content = EmailTemplates::getPasswordChangedTemplate($name);
+        
+        return $emailSender->sendEmail($email, $name, $subject, $html_content);
+        
+    } catch (Exception $e) {
+        error_log("[Email] Erro ao enviar confirmação: " . $e->getMessage());
         return false;
     }
 }
