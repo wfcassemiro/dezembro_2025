@@ -519,16 +519,24 @@ include __DIR__ . '/../vision/includes/sidebar.php';
             <!-- Palestra Relacionada (Palestras Agendadas) -->
             <div class="form-group">
                 <label><i class="fas fa-chalkboard-teacher"></i> Palestra Agendada (opcional)</label>
-                <select name="lecture_id" id="lecture_id" class="form-control">
-                    <option value="">Nenhuma</option>
+                <select name="lecture_id" id="lecture_id" class="form-control" onchange="fillLectureTemplate()">
+                    <option value="">Selecione uma palestra para preencher o template...</option>
                     <?php foreach ($all_lectures as $lecture): ?>
-                    <option value="<?php echo $lecture['id']; ?>">
+                    <option value="<?php echo $lecture['id']; ?>"
+                            data-title="<?php echo htmlspecialchars($lecture['title'], ENT_QUOTES); ?>"
+                            data-speaker="<?php echo htmlspecialchars($lecture['speaker'], ENT_QUOTES); ?>"
+                            data-date="<?php echo date('d/m/Y', strtotime($lecture['announcement_date'])); ?>"
+                            data-time="<?php echo date('H:i', strtotime($lecture['lecture_time'])); ?>"
+                            data-description="<?php echo htmlspecialchars($lecture['description'] ?? '', ENT_QUOTES); ?>">
                         <?php echo date('d/m/Y', strtotime($lecture['announcement_date'])); ?> - 
                         <?php echo htmlspecialchars($lecture['title']); ?> 
                         (<?php echo htmlspecialchars($lecture['speaker']); ?>)
                     </option>
                     <?php endforeach; ?>
                 </select>
+                <small style="color: rgba(255,255,255,0.6); display: block; margin-top: 5px;">
+                    <i class="fas fa-magic"></i> Ao selecionar uma palestra, o template será preenchido automaticamente
+                </small>
             </div>
             
             <!-- Assunto -->
