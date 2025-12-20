@@ -3,8 +3,8 @@ session_start();
 require_once __DIR__ . '/../config/database.php';
 
 // CORREÇÃO: Usar o sistema de email corrigido
-require_once __DIR__ . '/email_config.php';
-require_once __DIR__ . '/email.php';
+require_once __DIR__ . '/../config/email_config.php';
+require_once __DIR__ . '/../config/email.php';
 
 // Verificar se é admin
 if (!isset($_SESSION['user_id']) || !isset($_SESSION['is_admin']) || !$_SESSION['is_admin']) {
@@ -229,24 +229,35 @@ try {
 // Verificar status da configuração de email
 $email_configured = isEmailConfigured();
 
+// Incluir os arquivos do template Vision
+include __DIR__ . '/../vision/includes/head.php';
+include __DIR__ . '/../vision/includes/header.php';
+include __DIR__ . '/../vision/includes/sidebar.php';
 ?>
 
-<?php include __DIR__ . '/../vision/includes/header.php'; ?>
+<div class="main-content">
+    <div class="glass-hero">
+        <div class="hero-content">
+            <h1><i class="fas fa-envelope"></i> Sistema de E-mails</h1>
+            <p>Envio de emails em massa para usuários da plataforma</p>
+        </div>
+    </div>
 
-<div class="content-wrapper">
-    <div class="glass-card">
-        <h2><i class="fas fa-envelope"></i> Sistema de E-mails</h2>
-        
-        <?php if ($message): ?>
-        <div class="success-alert"><?php echo $message; ?></div>
-        <?php endif; ?>
-        
-        <?php if ($error): ?>
-        <div class="error-alert"><?php echo $error; ?></div>
-        <?php endif; ?>
-        
-        <!-- Status da Configuração -->
-        <div class="config-status" style="margin-bottom: 20px; padding: 15px; border-radius: 10px; background: <?php echo $email_configured ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)'; ?>; border: 1px solid <?php echo $email_configured ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)'; ?>;">
+    <?php if ($message): ?>
+    <div class="success-alert">
+        <i class="fas fa-check-circle"></i> <?php echo $message; ?>
+    </div>
+    <?php endif; ?>
+    
+    <?php if ($error): ?>
+    <div class="error-alert">
+        <i class="fas fa-exclamation-circle"></i> <?php echo $error; ?>
+    </div>
+    <?php endif; ?>
+    
+    <!-- Status da Configuração -->
+    <div class="video-card glass-card">
+        <div class="config-status" style="padding: 15px; border-radius: 10px; background: <?php echo $email_configured ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)'; ?>; border: 1px solid <?php echo $email_configured ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)'; ?>;">
             <div style="display: flex; align-items: center; gap: 10px;">
                 <i class="fas <?php echo $email_configured ? 'fa-check-circle' : 'fa-exclamation-triangle'; ?>" style="color: <?php echo $email_configured ? '#10b981' : '#ef4444'; ?>; font-size: 1.5rem;"></i>
                 <div>
@@ -266,196 +277,179 @@ $email_configured = isEmailConfigured();
         
         <!-- Teste de Email -->
         <?php if ($email_configured): ?>
-        <div class="admin-form-section" style="margin-bottom: 20px;">
+        <div class="admin-form-section" style="margin-top: 20px;">
             <h3><i class="fas fa-flask"></i> Testar Configuração</h3>
             <form method="POST" style="display: flex; gap: 15px; align-items: flex-end; flex-wrap: wrap;">
                 <input type="hidden" name="action" value="test_email">
-                <div class="form-group" style="flex: 1; min-width: 250px;">
+                <div class="form-group" style="flex: 1; min-width: 250px; margin-bottom: 0;">
                     <label>Email para teste:</label>
                     <input type="email" name="test_email" class="form-control" placeholder="seu@email.com" required>
                 </div>
-                <button type="submit" class="vision-btn" style="padding: 12px 25px;">
+                <button type="submit" class="cta-btn" style="padding: 12px 25px;">
                     <i class="fas fa-paper-plane"></i> Enviar Teste
                 </button>
             </form>
         </div>
         <?php endif; ?>
-        
-        <!-- Estatísticas -->
-        <div class="stats-grid">
-            <div class="glass-card stats-card">
-                <div class="stats-content">
-                    <div class="stats-info">
-                        <h3>Total de Usuários</h3>
-                        <div class="stats-number"><?php echo $total_users; ?></div>
-                    </div>
-                    <i class="fas fa-users stats-icon stats-icon-blue"></i>
-                </div>
-            </div>
-            
-            <div class="glass-card stats-card">
-                <div class="stats-content">
-                    <div class="stats-info">
-                        <h3>Assinantes</h3>
-                        <div class="stats-number"><?php echo $total_subscribers; ?></div>
-                    </div>
-                    <i class="fas fa-crown stats-icon stats-icon-green"></i>
-                </div>
-            </div>
-            
-            <div class="glass-card stats-card">
-                <div class="stats-content">
-                    <div class="stats-info">
-                        <h3>Não Assinantes</h3>
-                        <div class="stats-number"><?php echo $total_users - $total_subscribers; ?></div>
-                    </div>
-                    <i class="fas fa-user stats-icon stats-icon-red"></i>
-                </div>
-            </div>
-            
-            <div class="glass-card stats-card">
-                <div class="stats-content">
-                    <div class="stats-info">
-                        <h3>Emails Enviados</h3>
-                        <div class="stats-number"><?php echo $total_sent; ?></div>
-                    </div>
-                    <i class="fas fa-paper-plane stats-icon stats-icon-purple"></i>
-                </div>
-            </div>
-        </div>
-        
-        <!-- Formulário de Envio -->
-        <div class="glass-card" style="margin-top: 30px;">
-            <h3><i class="fas fa-edit"></i> Enviar Novo E-mail</h3>
-            
-            <form method="POST" class="vision-form">
-                <input type="hidden" name="action" value="send_email">
-                
-                <div class="form-grid">
-                    <div class="form-group">
-                        <label><i class="fas fa-users"></i> Destinatários</label>
-                        <select name="recipient_type" class="form-control" required>
-                            <option value="all">Todos os Usuários (<?php echo $total_users; ?>)</option>
-                            <option value="subscribers">Apenas Assinantes (<?php echo $total_subscribers; ?>)</option>
-                            <option value="non_subscribers">Não Assinantes (<?php echo $total_users - $total_subscribers; ?>)</option>
-                        </select>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label><i class="fas fa-chalkboard-teacher"></i> Palestra Relacionada (opcional)</label>
-                        <select name="lecture_id" class="form-control">
-                            <option value="">Nenhuma</option>
-                            <?php
-                            $lectures = $pdo->query("SELECT id, title FROM lectures ORDER BY announcement_date DESC LIMIT 20")->fetchAll();
-                            foreach ($lectures as $lecture):
-                            ?>
-                            <option value="<?php echo $lecture['id']; ?>"><?php echo htmlspecialchars($lecture['title']); ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                </div>
-                
-                <div class="form-group">
-                    <label><i class="fas fa-heading"></i> Assunto</label>
-                    <input type="text" name="subject" class="form-control" placeholder="Assunto do e-mail" required>
-                </div>
-                
-                <div class="form-group">
-                    <label><i class="fas fa-link"></i> Link de Acesso (opcional)</label>
-                    <input type="url" name="access_link" class="form-control" placeholder="https://...">
-                    <small style="color: rgba(255,255,255,0.6);">Use [LINK] no corpo do email para inserir este link</small>
-                </div>
-                
-                <div class="form-group">
-                    <label><i class="fas fa-align-left"></i> Mensagem</label>
-                    <textarea name="message" class="form-control" rows="10" placeholder="Digite sua mensagem aqui...&#10;&#10;Use [NOME] para personalizar com o nome do destinatário.&#10;Use [LINK] para inserir o link de acesso." required></textarea>
-                </div>
-                
-                <div style="text-align: center; margin-top: 20px;">
-                    <button type="submit" class="vision-btn vision-btn-primary" style="padding: 15px 40px; font-size: 1.1rem;" <?php echo !$email_configured ? 'disabled title="Configure o email primeiro"' : ''; ?>>
-                        <i class="fas fa-paper-plane"></i> Enviar E-mails
-                    </button>
-                </div>
-            </form>
-        </div>
-        
-        <!-- Templates Rápidos -->
-        <div class="glass-card" style="margin-top: 30px;">
-            <h3><i class="fas fa-magic"></i> Templates Rápidos</h3>
-            
-            <div class="quick-actions-grid">
-                <div class="quick-action-card" onclick="useTemplate('welcome')" style="cursor: pointer;">
-                    <div class="quick-action-icon quick-action-icon-blue">
-                        <i class="fas fa-hand-wave"></i>
-                    </div>
-                    <h3>Boas-vindas</h3>
-                    <p>Novos usuários</p>
-                </div>
-                
-                <div class="quick-action-card" onclick="useTemplate('newsletter')" style="cursor: pointer;">
-                    <div class="quick-action-icon quick-action-icon-purple">
-                        <i class="fas fa-newspaper"></i>
-                    </div>
-                    <h3>Newsletter</h3>
-                    <p>Novidades da semana</p>
-                </div>
-                
-                <div class="quick-action-card" onclick="useTemplate('promotion')" style="cursor: pointer;">
-                    <div class="quick-action-icon quick-action-icon-green">
-                        <i class="fas fa-percentage"></i>
-                    </div>
-                    <h3>Promoção</h3>
-                    <p>Ofertas especiais</p>
-                </div>
-                
-                <div class="quick-action-card" onclick="useTemplate('reminder')" style="cursor: pointer;">
-                    <div class="quick-action-icon quick-action-icon-red">
-                        <i class="fas fa-bell"></i>
-                    </div>
-                    <h3>Lembrete</h3>
-                    <p>Informações importantes</p>
-                </div>
-            </div>
-        </div>
-        
-        <!-- Histórico de Emails -->
-        <?php if (!empty($recent_emails)): ?>
-        <div class="glass-card" style="margin-top: 30px;">
-            <h3><i class="fas fa-history"></i> Últimos E-mails Enviados</h3>
-            
-            <div class="table-container">
-                <table class="vision-table">
-                    <thead>
-                        <tr>
-                            <th>Data</th>
-                            <th>Assunto</th>
-                            <th>Destinatários</th>
-                            <th>Status</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php foreach ($recent_emails as $email): ?>
-                        <tr>
-                            <td><?php echo date('d/m/Y H:i', strtotime($email['created_at'])); ?></td>
-                            <td><?php echo htmlspecialchars(substr($email['subject'], 0, 50)); ?><?php echo strlen($email['subject']) > 50 ? '...' : ''; ?></td>
-                            <td><?php echo $email['recipient_count']; ?> (<?php echo $email['recipient_type']; ?>)</td>
-                            <td>
-                                <?php if ($email['status'] === 'sent'): ?>
-                                <span style="color: #10b981;"><i class="fas fa-check"></i> Enviado</span>
-                                <?php elseif ($email['status'] === 'failed'): ?>
-                                <span style="color: #ef4444;"><i class="fas fa-times"></i> Falhou</span>
-                                <?php else: ?>
-                                <span style="color: #f59e0b;"><i class="fas fa-clock"></i> <?php echo $email['status']; ?></span>
-                                <?php endif; ?>
-                            </td>
-                        </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-        <?php endif; ?>
     </div>
+    
+    <!-- Estatísticas -->
+    <div class="video-card glass-card">
+        <h3><i class="fas fa-chart-bar"></i> Estatísticas</h3>
+        <div class="stats-grid">
+            <div class="stat-item">
+                <div class="stat-number"><?php echo $total_users; ?></div>
+                <div class="stat-label">Total de Usuários</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-number"><?php echo $total_subscribers; ?></div>
+                <div class="stat-label">Assinantes</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-number"><?php echo $total_users - $total_subscribers; ?></div>
+                <div class="stat-label">Não Assinantes</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-number"><?php echo $total_sent; ?></div>
+                <div class="stat-label">Emails Enviados</div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Formulário de Envio -->
+    <div class="video-card glass-card">
+        <h3><i class="fas fa-edit"></i> Enviar Novo E-mail</h3>
+        
+        <form method="POST" class="admin-form">
+            <input type="hidden" name="action" value="send_email">
+            
+            <div class="form-row">
+                <div class="form-group">
+                    <label><i class="fas fa-users"></i> Destinatários</label>
+                    <select name="recipient_type" class="form-control" required>
+                        <option value="all">Todos os Usuários (<?php echo $total_users; ?>)</option>
+                        <option value="subscribers">Apenas Assinantes (<?php echo $total_subscribers; ?>)</option>
+                        <option value="non_subscribers">Não Assinantes (<?php echo $total_users - $total_subscribers; ?>)</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label><i class="fas fa-chalkboard-teacher"></i> Palestra Relacionada (opcional)</label>
+                    <select name="lecture_id" class="form-control">
+                        <option value="">Nenhuma</option>
+                        <?php
+                        $lectures = $pdo->query("SELECT id, title FROM lectures ORDER BY announcement_date DESC LIMIT 20")->fetchAll();
+                        foreach ($lectures as $lecture):
+                        ?>
+                        <option value="<?php echo $lecture['id']; ?>"><?php echo htmlspecialchars($lecture['title']); ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label><i class="fas fa-heading"></i> Assunto</label>
+                <input type="text" name="subject" class="form-control" placeholder="Assunto do e-mail" required>
+            </div>
+            
+            <div class="form-group">
+                <label><i class="fas fa-link"></i> Link de Acesso (opcional)</label>
+                <input type="url" name="access_link" class="form-control" placeholder="https://...">
+                <small style="color: rgba(255,255,255,0.6); display: block; margin-top: 5px;">Use [LINK] no corpo do email para inserir este link</small>
+            </div>
+            
+            <div class="form-group">
+                <label><i class="fas fa-align-left"></i> Mensagem</label>
+                <textarea name="message" class="form-control" rows="10" placeholder="Digite sua mensagem aqui...
+
+Use [NOME] para personalizar com o nome do destinatário.
+Use [LINK] para inserir o link de acesso." required></textarea>
+            </div>
+            
+            <div style="text-align: center; margin-top: 20px;">
+                <button type="submit" class="cta-btn" style="padding: 15px 40px; font-size: 1.1rem;" <?php echo !$email_configured ? 'disabled title="Configure o email primeiro"' : ''; ?>>
+                    <i class="fas fa-paper-plane"></i> Enviar E-mails
+                </button>
+            </div>
+        </form>
+    </div>
+    
+    <!-- Templates Rápidos -->
+    <div class="video-card glass-card">
+        <h3><i class="fas fa-magic"></i> Templates Rápidos</h3>
+        
+        <div class="quick-actions-grid">
+            <div class="quick-action-card" onclick="useTemplate('welcome')" style="cursor: pointer;">
+                <div class="quick-action-icon" style="color: #3b82f6;">
+                    <i class="fas fa-hand-wave"></i>
+                </div>
+                <h4>Boas-vindas</h4>
+                <p>Novos usuários</p>
+            </div>
+            
+            <div class="quick-action-card" onclick="useTemplate('newsletter')" style="cursor: pointer;">
+                <div class="quick-action-icon" style="color: #8b5cf6;">
+                    <i class="fas fa-newspaper"></i>
+                </div>
+                <h4>Newsletter</h4>
+                <p>Novidades da semana</p>
+            </div>
+            
+            <div class="quick-action-card" onclick="useTemplate('promotion')" style="cursor: pointer;">
+                <div class="quick-action-icon" style="color: #10b981;">
+                    <i class="fas fa-percentage"></i>
+                </div>
+                <h4>Promoção</h4>
+                <p>Ofertas especiais</p>
+            </div>
+            
+            <div class="quick-action-card" onclick="useTemplate('reminder')" style="cursor: pointer;">
+                <div class="quick-action-icon" style="color: #ef4444;">
+                    <i class="fas fa-bell"></i>
+                </div>
+                <h4>Lembrete</h4>
+                <p>Informações importantes</p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Histórico de Emails -->
+    <?php if (!empty($recent_emails)): ?>
+    <div class="video-card glass-card">
+        <h3><i class="fas fa-history"></i> Últimos E-mails Enviados</h3>
+        
+        <div class="table-container">
+            <table class="certificates-table">
+                <thead>
+                    <tr>
+                        <th>Data</th>
+                        <th>Assunto</th>
+                        <th>Destinatários</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($recent_emails as $email): ?>
+                    <tr>
+                        <td><?php echo date('d/m/Y H:i', strtotime($email['created_at'])); ?></td>
+                        <td><?php echo htmlspecialchars(substr($email['subject'], 0, 50)); ?><?php echo strlen($email['subject']) > 50 ? '...' : ''; ?></td>
+                        <td><?php echo $email['recipient_count']; ?> (<?php echo $email['recipient_type']; ?>)</td>
+                        <td>
+                            <?php if ($email['status'] === 'sent'): ?>
+                            <span style="color: #10b981;"><i class="fas fa-check"></i> Enviado</span>
+                            <?php elseif ($email['status'] === 'failed'): ?>
+                            <span style="color: #ef4444;"><i class="fas fa-times"></i> Falhou</span>
+                            <?php else: ?>
+                            <span style="color: #f59e0b;"><i class="fas fa-clock"></i> <?php echo $email['status']; ?></span>
+                            <?php endif; ?>
+                        </td>
+                    </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <?php endif; ?>
 </div>
 
 <script>
@@ -489,99 +483,116 @@ function useTemplate(type) {
 </script>
 
 <style>
+/* Estatísticas */
 .stats-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
     gap: 20px;
-    margin-bottom: 20px;
+    margin-top: 20px;
 }
 
-.stats-card {
-    padding: 20px;
+.stat-item {
+    text-align: center;
+    padding: 25px 20px;
+    background: rgba(142, 68, 173, 0.2);
+    border-radius: 15px;
+    border: 1px solid rgba(142, 68, 173, 0.3);
+    transition: transform 0.2s ease;
+    backdrop-filter: blur(10px);
 }
 
-.stats-content {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
+.stat-item:hover {
+    transform: translateY(-2px);
+    background: rgba(142, 68, 173, 0.3);
 }
 
-.stats-info h3 {
-    font-size: 0.9rem;
-    color: #999;
-    margin-bottom: 10px;
-}
-
-.stats-number {
-    font-size: 2rem;
+.stat-number {
+    font-size: 2.8rem;
     font-weight: bold;
-    color: #fff;
+    color: #c084fc;
+    margin-bottom: 8px;
 }
 
-.stats-icon {
-    font-size: 2.5rem;
-    opacity: 0.3;
+.stat-label {
+    font-size: 0.95rem;
+    color: rgba(255, 255, 255, 0.8);
+    font-weight: 500;
 }
 
-.stats-icon-blue { color: #3b82f6; }
-.stats-icon-green { color: #10b981; }
-.stats-icon-red { color: #ef4444; }
-.stats-icon-purple { color: #8b5cf6; }
-
-.form-grid {
+/* Formulário */
+.form-row {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 20px;
+    margin-bottom: 20px;
 }
 
 .form-group {
-    display: flex;
-    flex-direction: column;
+    margin-bottom: 20px;
 }
 
 .form-group label {
+    display: block;
     margin-bottom: 8px;
     font-weight: 600;
-    display: flex;
-    align-items: center;
-    gap: 8px;
+    color: white;
 }
 
-.form-group input,
-.form-group select,
-.form-group textarea {
-    padding: 12px;
-    border-radius: 8px;
-    border: 1px solid rgba(255,255,255,0.2);
-    background: rgba(255,255,255,0.05);
-    color: #fff;
+.form-group label i {
+    margin-right: 8px;
+    color: #c084fc;
+}
+
+.form-control {
+    width: 100%;
+    padding: 12px 16px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 10px;
     font-size: 1rem;
+    background: rgba(0, 0, 0, 0.3);
+    color: white;
+    transition: all 0.3s ease;
 }
 
-.form-group textarea {
+.form-control:focus {
+    outline: none;
+    border-color: #c084fc;
+    box-shadow: 0 0 0 3px rgba(192, 132, 252, 0.1);
+    background: rgba(0, 0, 0, 0.5);
+}
+
+.form-control option {
+    background: #1a1a1a;
+    color: white;
+}
+
+textarea.form-control {
     resize: vertical;
     min-height: 150px;
 }
 
+/* Templates Rápidos */
 .quick-actions-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
     gap: 15px;
+    margin-top: 20px;
 }
 
 .quick-action-card {
     padding: 25px 15px;
     text-align: center;
-    background: rgba(255,255,255,0.03);
+    background: rgba(30, 30, 30, 0.6);
     border-radius: 12px;
     transition: all 0.3s ease;
-    border: 1px solid rgba(255,255,255,0.1);
+    border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .quick-action-card:hover {
     transform: translateY(-3px);
-    background: rgba(255,255,255,0.06);
-    border-color: rgba(255,255,255,0.2);
+    background: rgba(40, 40, 40, 0.8);
+    border-color: rgba(192, 132, 252, 0.3);
+    box-shadow: 0 5px 20px rgba(192, 132, 252, 0.1);
 }
 
 .quick-action-icon {
@@ -589,66 +600,47 @@ function useTemplate(type) {
     margin-bottom: 10px;
 }
 
-.quick-action-icon-blue { color: #3b82f6; }
-.quick-action-icon-purple { color: #8b5cf6; }
-.quick-action-icon-green { color: #10b981; }
-.quick-action-icon-red { color: #ef4444; }
-
-.quick-action-card h3 {
+.quick-action-card h4 {
     margin: 10px 0 5px 0;
     font-size: 1rem;
+    color: white;
 }
 
 .quick-action-card p {
     margin: 0;
     font-size: 0.85rem;
-    color: rgba(255,255,255,0.6);
+    color: rgba(255, 255, 255, 0.6);
 }
 
+/* Alerts */
 .success-alert {
-    background: rgba(16, 185, 129, 0.1);
-    border: 1px solid rgba(16, 185, 129, 0.3);
-    color: #10b981;
-    padding: 15px;
-    border-radius: 10px;
-    margin-bottom: 20px;
+    background: rgba(16, 185, 129, 0.2);
+    border: 1px solid rgba(16, 185, 129, 0.5);
+    color: #10f981;
+    padding: 15px 20px;
+    border-radius: 12px;
+    margin: 20px 0;
+    font-weight: 500;
+    backdrop-filter: blur(10px);
 }
 
 .error-alert {
-    background: rgba(239, 68, 68, 0.1);
-    border: 1px solid rgba(239, 68, 68, 0.3);
-    color: #ef4444;
-    padding: 15px;
-    border-radius: 10px;
-    margin-bottom: 20px;
-}
-
-.table-container {
-    overflow-x: auto;
-}
-
-.vision-table {
-    width: 100%;
-    border-collapse: collapse;
-}
-
-.vision-table th,
-.vision-table td {
-    padding: 12px 15px;
-    text-align: left;
-    border-bottom: 1px solid rgba(255,255,255,0.1);
-}
-
-.vision-table th {
-    background: rgba(255,255,255,0.05);
-    font-weight: 600;
-}
-
-.admin-form-section {
-    background: rgba(255,255,255,0.03);
-    padding: 20px;
+    background: rgba(239, 68, 68, 0.2);
+    border: 1px solid rgba(239, 68, 68, 0.5);
+    color: #ff6b6b;
+    padding: 15px 20px;
     border-radius: 12px;
-    border: 1px solid rgba(255,255,255,0.1);
+    margin: 20px 0;
+    font-weight: 500;
+    backdrop-filter: blur(10px);
+}
+
+/* Admin Form Section */
+.admin-form-section {
+    padding: 20px;
+    background: rgba(30, 30, 30, 0.6);
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .admin-form-section h3 {
@@ -657,13 +649,37 @@ function useTemplate(type) {
     color: #c084fc;
 }
 
+/* Tabela */
+.table-container {
+    overflow-x: auto;
+    margin-top: 20px;
+    border-radius: 15px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(0, 0, 0, 0.2);
+}
+
+/* Responsivo */
 @media (max-width: 768px) {
-    .form-grid {
+    .form-row {
         grid-template-columns: 1fr;
     }
     
     .stats-grid {
         grid-template-columns: 1fr 1fr;
+    }
+    
+    .quick-actions-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+@media (max-width: 480px) {
+    .stats-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .stat-number {
+        font-size: 2.2rem;
     }
 }
 </style>
