@@ -7,38 +7,40 @@ date_default_timezone_set('America/Sao_Paulo');
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../includes/certificate_generator_helper.php';
 
-// CORREÇÃO: Incluir o sistema de email corrigido
-require_once __DIR__ . '/email_config.php';
-require_once __DIR__ . '/email.php';
+// ============================================
+// CORREÇÃO: Incluir sistema de email PHPMailer
+// ============================================
+require_once __DIR__ . '/../config/email_config.php';
+require_once __DIR__ . '/../config/email.php';
 
 /**
  * Função de envio de email de certificado - CORRIGIDA
- * Usa a classe EmailSender com suporte a SMTP
+ * Usa PHPMailer com SMTP ao invés de mail() nativo
  */
 function sendCertificateEmailNotification($user_email, $user_name, $certificate_id, $lecture_title) {
     try {
-        // Verificar se o email está configurado
+        // Verificar se o sistema de email está configurado
         if (!isEmailConfigured()) {
             error_log("[Certificados] Sistema de email não configurado. Verifique email_config.php");
             return false;
         }
         
         // Log de tentativa
-        error_log("[Certificados] Tentando enviar email de certificado para: $user_email");
+        error_log("[Certificados] Enviando email de certificado para: $user_email");
         
-        // Usar a função centralizada de envio de email de certificado
+        // Usar a função centralizada sendCertificateEmail do email.php
         $result = sendCertificateEmail($user_email, $user_name, $certificate_id, $lecture_title);
         
         if ($result) {
-            error_log("[Certificados] Email T101 enviado com sucesso para: $user_email");
+            error_log("[Certificados] ✓ Email enviado com sucesso para: $user_email");
             return true;
         } else {
-            error_log("[Certificados] Falha no envio de email T101 para: $user_email");
+            error_log("[Certificados] ✗ Falha ao enviar email para: $user_email");
             return false;
         }
         
     } catch (Exception $e) {
-        error_log("[Certificados] Erro no envio de email T101: " . $e->getMessage());
+        error_log("[Certificados] Erro no envio de email: " . $e->getMessage());
         return false;
     }
 }
@@ -74,6 +76,7 @@ function logCertificateAction($action, $certificate_id, $user_id, $lecture_id, $
         ");
         $stmt->execute([$action, $certificate_id, $user_id, $lecture_id, $admin_id, $details]);
     } catch (Exception $e) {
+        // Log silenciosamente em arquivo se não conseguir inserir no banco
         error_log("Certificate audit log error: " . $e->getMessage());
     }
 }
@@ -150,7 +153,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 logCertificateAction('DELETE_REPLACED', $existing['id'], $user_id, $lecture_id, $_SESSION['user_id'], 'Deletado para substituição');
                             }
                             
-                            // Calcular duração em horas
+                            // Calcular duração em horas (usando a lógica da T101)
                             $duration_minutes = $lecture['duration_minutes'] ?? 0;
                             if ($duration_minutes <= 0.5 * 60) {
                                 $duration_hours = 0.5;
@@ -164,7 +167,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             
                             // Gerar novo certificado
                             $certificate_id = generateUUID();
-                            $issued_at = date('Y-m-d H:i:s');
+                            $issued_at = date('Y-m-d H:i:s'); // Já com timezone correto
                             
                             $stmt = $pdo->prepare("
                                 INSERT INTO certificates (id, user_id, lecture_id, user_name, lecture_title, speaker_name, duration_hours, issued_at) 
@@ -182,7 +185,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 $issued_at
                             ]);
                             
-                            // Gerar arquivo físico do certificado
+                            // Gerar arquivo físico do certificado usando o sistema T101
                             $certificate_data = [
                                 'user_name' => $user['name'],
                                 'lecture_title' => $lecture['title'],
@@ -209,15 +212,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 
                                 $generated_count++;
                                 
-                                // CORREÇÃO: Enviar email usando o sistema corrigido
+                                // Enviar email se solicitado
                                 if ($send_email) {
-                                    $email_sent = sendCertificateEmailNotification(
-                                        $user['email'], 
-                                        $user['name'], 
-                                        $certificate_id, 
-                                        $lecture['title']
-                                    );
-                                    
+                                    $email_sent = sendCertificateEmailNotification($user['email'], $user['name'], $certificate_id, $lecture['title']);
                                     if ($email_sent) {
                                         $email_sent_count++;
                                         logCertificateAction('EMAIL_SENT', $certificate_id, $user_id, $lecture_id, $_SESSION['user_id'], "Email enviado para {$user['email']}");
@@ -241,7 +238,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         }
                     }
                     
-                    // Mensagem de resultado detalhada
+                    // Mensagem de resultado
+                    $result_message = "📊 Processamento concluído: ";
                     $result_parts = [];
                     
                     if ($generated_count > 0) {
@@ -254,16 +252,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $result_parts[] = "❌ {$error_count} erro(s)";
                     }
                     
-                    $message = "📊 Processamento concluído para {$user['name']}: " . implode(', ', $result_parts);
+                    $message = $result_message . implode(', ', $result_parts) . " para {$user['name']}";
                     
-                    // Status do envio de email
                     if ($send_email) {
                         if ($email_sent_count > 0 && $email_failed_count == 0) {
                             $message .= " | 📧 {$email_sent_count} email(s) enviado(s) com sucesso!";
                         } elseif ($email_sent_count > 0 && $email_failed_count > 0) {
-                            $message .= " | 📧 {$email_sent_count} email(s) enviado(s), ⚠️ {$email_failed_count} falha(s)";
+                            $message .= " | 📧 {$email_sent_count} enviado(s), ⚠️ {$email_failed_count} falha(s)";
                         } elseif ($email_failed_count > 0) {
-                            $message .= " | ⚠️ Certificados gerados mas {$email_failed_count} email(s) não puderam ser enviados. Verifique as configurações SMTP.";
+                            $message .= " | ⚠️ Certificados gerados mas {$email_failed_count} email(s) não puderam ser enviados.";
                         }
                     }
                 }
@@ -272,29 +269,270 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
     }
+    
+    // ---- IMPORTAÇÃO DE CSV PARA GERAÇÃO EM LOTE ----
+    elseif (isset($_POST['import_csv'])) {
+        $csv_date = $_POST['csv_date'] ?? '';
+        $lecture_title_manual = trim($_POST['lecture_title_manual'] ?? '');
+        $speaker_name_manual = trim($_POST['speaker_name_manual'] ?? '');
+        $duration_minutes_manual = intval($_POST['duration_minutes_manual'] ?? 60);
+        $selected_emails = $_POST['participant_emails'] ?? [];
+        
+        if (empty($csv_date)) {
+            $error = 'Data do CSV é obrigatória.';
+        } elseif (empty($lecture_title_manual) || empty($speaker_name_manual)) {
+            $error = 'Título da palestra e nome do palestrante são obrigatórios.';
+        } elseif (empty($selected_emails)) {
+            $error = 'Nenhum participante selecionado.';
+        } else {
+            try {
+                // Criar lecture_id único para a live
+                $live_lecture_id = 'live-' . $csv_date;
+                
+                // Verificar/criar registro na tabela lectures
+                $stmtCheckLecture = $pdo->prepare("SELECT id FROM lectures WHERE id = ?");
+                $stmtCheckLecture->execute([$live_lecture_id]);
+                $existingLecture = $stmtCheckLecture->fetch();
+                
+                if (!$existingLecture) {
+                    $insertLectureSql = "INSERT INTO lectures (id, title, speaker, duration_minutes, description, created_at) 
+                                        VALUES (?, ?, ?, ?, ?, NOW())
+                                        ON DUPLICATE KEY UPDATE title = VALUES(title), speaker = VALUES(speaker)";
+                    $stmtInsertLecture = $pdo->prepare($insertLectureSql);
+                    $stmtInsertLecture->execute([
+                        $live_lecture_id,
+                        $lecture_title_manual,
+                        $speaker_name_manual,
+                        $duration_minutes_manual,
+                        'Transmissão ao vivo - ' . date('d/m/Y', strtotime($csv_date))
+                    ]);
+                }
+                
+                // Calcular duração em horas
+                $duration_hours = $duration_minutes_manual / 60;
+                if ($duration_hours <= 0.5) {
+                    $duration_hours = 0.5;
+                } elseif ($duration_hours <= 1.0) {
+                    $duration_hours = 1.0;
+                } elseif ($duration_hours <= 1.5) {
+                    $duration_hours = 1.5;
+                } else {
+                    $duration_hours = ceil($duration_hours * 2) / 2;
+                }
+                
+                // Gerar certificados APENAS para emails selecionados
+                $generated_count = 0;
+                $skipped_count = 0;
+                $error_count = 0;
+                $email_sent_count = 0;
+                $email_failed_count = 0;
+                
+                foreach ($selected_emails as $participant_email) {
+                    try {
+                        // Buscar usuário por email
+                        $stmt = $pdo->prepare("SELECT id, name, email FROM users WHERE email = ?");
+                        $stmt->execute([$participant_email]);
+                        $user = $stmt->fetch();
+                        
+                        if (!$user) {
+                            writeToCustomLog("AVISO CSV: Usuário não encontrado - Email: {$participant_email}");
+                            $error_count++;
+                            continue;
+                        }
+                        
+                        // Verificar se já existe certificado
+                        $stmt = $pdo->prepare("SELECT id FROM certificates WHERE user_id = ? AND lecture_id = ?");
+                        $stmt->execute([$user['id'], $live_lecture_id]);
+                        $existing = $stmt->fetch();
+                        
+                        if ($existing) {
+                            $skipped_count++;
+                            continue;
+                        }
+                        
+                        // Gerar certificado
+                        $certificate_id = generateUUID();
+                        $issued_at = date('Y-m-d H:i:s');
+                        
+                        $stmt = $pdo->prepare("
+                            INSERT INTO certificates (id, user_id, lecture_id, user_name, lecture_title, speaker_name, duration_hours, issued_at) 
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        ");
+                        
+                        $stmt->execute([
+                            $certificate_id,
+                            $user['id'],
+                            $live_lecture_id,
+                            $user['name'],
+                            $lecture_title_manual,
+                            $speaker_name_manual,
+                            $duration_hours,
+                            $issued_at
+                        ]);
+                        
+                        // Gerar arquivo físico
+                        $certificate_data = [
+                            'user_name' => $user['name'],
+                            'lecture_title' => $lecture_title_manual,
+                            'speaker_name' => $speaker_name_manual,
+                            'duration_minutes' => $duration_minutes_manual
+                        ];
+                        
+                        $physical_file_path = generateAndSaveCertificatePng(
+                            $certificate_id,
+                            $certificate_data,
+                            'CSV_IMPORT',
+                            'writeToCustomLog'
+                        );
+                        
+                        if ($physical_file_path) {
+                            logCertificateAction('GENERATE_CSV', $certificate_id, $user['id'], $live_lecture_id, $_SESSION['user_id'], "Gerado via CSV: {$user['name']} - {$lecture_title_manual}");
+                            
+                            $generated_count++;
+                            
+                            // Enviar email
+                            $email_sent = sendCertificateEmailNotification($user['email'], $user['name'], $certificate_id, $lecture_title_manual);
+                            if ($email_sent) {
+                                $email_sent_count++;
+                            } else {
+                                $email_failed_count++;
+                            }
+                        } else {
+                            $stmt = $pdo->prepare("DELETE FROM certificates WHERE id = ?");
+                            $stmt->execute([$certificate_id]);
+                            $error_count++;
+                        }
+                        
+                    } catch (Exception $e) {
+                        writeToCustomLog("ERRO CSV: {$participant_email} - " . $e->getMessage());
+                        $error_count++;
+                    }
+                }
+                
+                // Mensagem de resultado
+                $message = "✅ Importação CSV concluída: {$generated_count} certificado(s) gerado(s)";
+                if ($skipped_count > 0) {
+                    $message .= ", {$skipped_count} já existiam";
+                }
+                if ($error_count > 0) {
+                    $message .= ", {$error_count} erro(s)";
+                }
+                $message .= " - Palestra: {$lecture_title_manual}";
+                
+                if ($email_sent_count > 0) {
+                    $message .= " | 📧 {$email_sent_count} email(s) enviado(s)";
+                }
+                if ($email_failed_count > 0) {
+                    $message .= " | ⚠️ {$email_failed_count} email(s) falharam";
+                }
+                
+            } catch (Exception $e) {
+                $error = 'Erro ao processar CSV: ' . $e->getMessage();
+                writeToCustomLog("ERRO ao processar CSV: " . $e->getMessage());
+            }
+        }
+    }
+    
+    // DELETAR CERTIFICADO
+    elseif (isset($_POST['delete_certificate'])) {
+        $certificate_id = $_POST['certificate_id'] ?? '';
+        $confirm_delete = $_POST['confirm_delete'] ?? '';
+        
+        if (empty($certificate_id)) {
+            $error = 'ID do certificado é obrigatório.';
+        } elseif ($confirm_delete !== 'DELETE') {
+            $error = 'Digite "DELETE" para confirmar a exclusão.';
+        } else {
+            try {
+                // Buscar dados do certificado antes de deletar
+                $stmt = $pdo->prepare("
+                    SELECT c.*, u.name as user_name, l.title as lecture_title 
+                    FROM certificates c 
+                    LEFT JOIN users u ON c.user_id = u.id 
+                    LEFT JOIN lectures l ON c.lecture_id = l.id 
+                    WHERE c.id = ?
+                ");
+                $stmt->execute([$certificate_id]);
+                $cert = $stmt->fetch();
+                
+                if (!$cert) {
+                    $error = 'Certificado não encontrado.';
+                } else {
+                    // Deletar arquivo físico
+                    $physical_file = __DIR__ . '/../certificates/certificate_' . $certificate_id . '.png';
+                    if (file_exists($physical_file)) {
+                        unlink($physical_file);
+                    }
+                    
+                    // Deletar certificado do banco
+                    $stmt = $pdo->prepare("DELETE FROM certificates WHERE id = ?");
+                    $stmt->execute([$certificate_id]);
+                    
+                    // Log da ação
+                    logCertificateAction('DELETE', $certificate_id, $cert['user_id'], $cert['lecture_id'], $_SESSION['user_id'], "Deletado: {$cert['user_name']} - {$cert['lecture_title']}");
+                    
+                    $message = "🗑️ Certificado deletado: {$cert['user_name']} - {$cert['lecture_title']}";
+                }
+            } catch (Exception $e) {
+                $error = 'Erro ao deletar certificado: ' . $e->getMessage();
+            }
+        }
+    }
+    
+    // REGERAR CERTIFICADO
+    elseif (isset($_POST['regenerate_certificate'])) {
+        $certificate_id = $_POST['certificate_id'] ?? '';
+        
+        if (empty($certificate_id)) {
+            $error = 'ID do certificado é obrigatório.';
+        } else {
+            try {
+                // Buscar certificado com dados da palestra
+                $stmt = $pdo->prepare("
+                    SELECT c.*, u.name as user_name, l.title as lecture_title, l.speaker, l.duration_minutes
+                    FROM certificates c 
+                    LEFT JOIN users u ON c.user_id = u.id 
+                    LEFT JOIN lectures l ON c.lecture_id = l.id 
+                    WHERE c.id = ?
+                ");
+                $stmt->execute([$certificate_id]);
+                $cert = $stmt->fetch();
+                
+                if (!$cert) {
+                    $error = 'Certificado não encontrado.';
+                } else {
+                    // Atualizar data de emissão
+                    $new_issued_at = date('Y-m-d H:i:s');
+                    $stmt = $pdo->prepare("UPDATE certificates SET issued_at = ? WHERE id = ?");
+                    $stmt->execute([$new_issued_at, $certificate_id]);
+                    
+                    // Regerar arquivo físico usando sistema T101
+                    $certificate_data = [
+                        'user_name' => $cert['user_name'],
+                        'lecture_title' => $cert['lecture_title'],
+                        'speaker_name' => $cert['speaker'],
+                        'duration_minutes' => $cert['duration_minutes']
+                    ];
+                    
+                    $physical_file_path = generateAndSaveCertificatePng(
+                        $certificate_id,
+                        $certificate_data,
+                        'ADMIN_REGENERATE',
+                        'writeToCustomLog'
+                    );
+                    
+                    if ($physical_file_path) {
+                        // Log da ação
+                        logCertificateAction('REGENERATE', $certificate_id, $cert['user_id'], $cert['lecture_id'], $_SESSION['user_id'], "Regerado: {$cert['user_name']} - {$cert['lecture_title']} - Arquivo: " . basename($physical_file_path));
+                        
+                        $message = "🔄 Certificado regerado: {$cert['user_name']} - {$cert['lecture_title']}";
+                    } else {
+                        $error = 'Certificado atualizado no banco, mas erro ao gerar arquivo físico.';
+                    }
+                }
+            } catch (Exception $e) {
+                $error = 'Erro ao regerar certificado: ' . $e->getMessage();
+            }
+        }
+    }
 }
-
-// ============================================
-// O RESTO DO ARQUIVO PERMANECE IGUAL
-// (Copiar do arquivo original a partir daqui)
-// ============================================
-
-// Aqui continua o restante do código original do certificados.php
-// incluindo a importação de CSV, listagem de certificados, etc.
-// Este arquivo deve ser mesclado com o original mantendo apenas
-// a função sendCertificateEmailNotification() corrigida acima.
-
-?>
-
-<!-- 
-    INSTRUÇÕES DE INTEGRAÇÃO:
-    
-    1. Substitua a função sendCertificateEmailNotification() no seu certificados.php original
-       pela versão corrigida acima.
-    
-    2. Adicione os requires no início do arquivo:
-       require_once __DIR__ . '/email_config.php';
-       require_once __DIR__ . '/email.php';
-    
-    3. O restante do arquivo permanece igual.
--->
