@@ -112,10 +112,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     ");
                     $recipients = $stmt->fetchAll();
                 } elseif ($recipient_type === 'with_password') {
-                    $stmt = $pdo->query("SELECT id, email, name FROM users WHERE is_active = 1 AND password IS NOT NULL AND password != ''");
+                    $stmt = $pdo->query("SELECT id, email, name FROM users WHERE is_active = 1 AND password_hash IS NOT NULL AND password_hash != ''");
                     $recipients = $stmt->fetchAll();
                 } elseif ($recipient_type === 'without_password') {
-                    $stmt = $pdo->query("SELECT id, email, name FROM users WHERE is_active = 1 AND (password IS NULL OR password = '')");
+                    $stmt = $pdo->query("SELECT id, email, name FROM users WHERE is_active = 1 AND (password_hash IS NULL OR password_hash = '')");
                     $recipients = $stmt->fetchAll();
                 }
                 
