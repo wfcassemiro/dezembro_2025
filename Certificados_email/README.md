@@ -37,17 +37,17 @@ Ou adicione ao `composer.json`:
 
 ### Passo 2: Configurar Credenciais SMTP
 
-Edite `email_config.php`:
+O arquivo `email_config.php` já está configurado para **Hostinger**:
 
 ```php
-// Servidor SMTP
-define('SMTP_HOST', 'br1189.hostgator.com.br');
-define('SMTP_PORT', 587);        // 587 para TLS, 465 para SSL
-define('SMTP_SECURE', 'tls');    // 'tls' ou 'ssl'
+// Servidor SMTP da Hostinger
+define('SMTP_HOST', 'smtp.hostinger.com.br');
+define('SMTP_PORT', 465);        // 465 para SSL
+define('SMTP_SECURE', 'ssl');    // SSL para Hostinger
 
 // Credenciais
 define('SMTP_USERNAME', 'contato@translators101.com');
-define('SMTP_PASSWORD', 'SUA_SENHA_AQUI');
+define('SMTP_PASSWORD', 'r:#D$!r=X1');
 
 // Remetente
 define('SMTP_FROM_EMAIL', 'contato@translators101.com');
