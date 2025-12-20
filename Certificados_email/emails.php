@@ -321,7 +321,7 @@ try {
 
 // Contar usuários com e sem senha
 try {
-    $stmt = $pdo->query("SELECT COUNT(*) as total FROM users WHERE is_active = 1 AND password IS NOT NULL AND password != ''");
+    $stmt = $pdo->query("SELECT COUNT(*) as total FROM users WHERE is_active = 1 AND password_hash IS NOT NULL AND password_hash != ''");
     $result = $stmt->fetch();
     $users_with_password = $result ? $result['total'] : 0;
 } catch (PDOException $e) {
@@ -329,7 +329,7 @@ try {
 }
 
 try {
-    $stmt = $pdo->query("SELECT COUNT(*) as total FROM users WHERE is_active = 1 AND (password IS NULL OR password = '')");
+    $stmt = $pdo->query("SELECT COUNT(*) as total FROM users WHERE is_active = 1 AND (password_hash IS NULL OR password_hash = '')");
     $result = $stmt->fetch();
     $users_without_password = $result ? $result['total'] : 0;
 } catch (PDOException $e) {
