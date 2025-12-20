@@ -790,3 +790,117 @@ include __DIR__ . '/../vision/includes/sidebar.php';
                     <input type="hidden" name="send_email" value="1">
                 </div>
             </form>
+            <!-- Formulário para Importar CSV -->
+            <div class="admin-form-section" style="margin-top: 40px;">
+                <h3><i class="fas fa-file-csv"></i> Importar CSV de presença ao vivo</h3>
+                <p style="color: rgba(255, 255, 255, 0.7); margin-bottom: 20px;">
+                    <i class="fas fa-info-circle"></i> Importe o arquivo CSV exportado da página de presença ao vivo para gerar certificados em lote.
+                </p>
+                
+                <button type="button" onclick="openModal('csvImportModal')" class="cta-btn" style="margin-bottom: 20px;">
+                    <i class="fas fa-upload"></i> Importar CSV
+                </button>
+                
+                <div style="background: rgba(52, 152, 219, 0.1); border: 1px solid rgba(52, 152, 219, 0.3); border-radius: 8px; padding: 15px; margin-top: 15px;">
+                    <h4 style="color: #3498db; margin: 0 0 10px 0;">
+                        <i class="fas fa-question-circle"></i> Como funciona?
+                    </h4>
+                    <ol style="color: rgba(255, 255, 255, 0.8); margin: 0; padding-left: 20px; line-height: 1.8;">
+                        <li>Exporte o CSV da página "Presença ao Vivo"</li>
+                        <li>Clique em "Importar CSV" acima</li>
+                        <li>Confirme ou edite os dados da palestra</li>
+                        <li>Os certificados serão gerados automaticamente para todos os participantes</li>
+                        <li>Os e-mails serão enviados automaticamente</li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Lista de Certificados -->
+    <div class="video-card glass-card">
+        <h2><i class="fas fa-list"></i> Certificados existentes</h2>
+        
+        <?php if (empty($certificates)): ?>
+            <div class="empty-state">
+                <i class="fas fa-certificate"></i>
+                <p>Nenhum certificado encontrado.</p>
+            </div>
+        <?php else: ?>
+            <div class="table-container">
+                <table class="certificates-table">
+                    <thead>
+                        <tr>
+                            <th>Usuário</th>
+                            <th>Palestra</th>
+                            <th>Data de Emissão</th>
+                            <th>Duração</th>
+                            <th>Status do Arquivo</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($certificates as $cert): ?>
+                            <tr>
+                                <td>
+                                    <div class="user-info">
+                                        <strong><?php echo htmlspecialchars($cert['user_name']); ?></strong>
+                                        <br><small><?php echo htmlspecialchars($cert['email']); ?></small>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="lecture-info">
+                                        <strong><?php echo htmlspecialchars($cert['lecture_title']); ?></strong>
+                                    </div>
+                                </td>
+                                <td><?php echo date('d/m/Y H:i', strtotime($cert['issued_at'])); ?></td>
+                                <td class="duration-col">
+                                    <?php echo $cert['duration_hours'] ?? '1.0'; ?>h
+                                </td>
+                                <td>
+                                    <?php 
+                                    $file_path = __DIR__ . '/../certificates/certificate_' . $cert['id'] . '.png';
+                                    if (file_exists($file_path)): 
+                                    ?>
+                                        <span class="file-status exists">✅ Arquivo T101</span>
+                                    <?php else: ?>
+                                        <span class="file-status missing">❌ Arquivo faltando</span>
+                                    <?php endif; ?>
+                                </td>
+                                <td>
+                                    <div class="action-buttons">
+                                        <a href="../view_certificate_files.php?id=<?php echo $cert['id']; ?>" 
+                                           target="_blank" class="action-btn view-btn" title="Ver certificado T101">
+                                            <i class="fas fa-eye"></i>
+                                        </a>
+                                        
+                                        <a href="../download_certificate_files.php?id=<?php echo $cert['id']; ?>" 
+                                           class="action-btn download-btn" title="Download T101">
+                                            <i class="fas fa-download"></i>
+                                        </a>
+                                        
+                                        <a href="../verificar_certificado.php?id=<?php echo $cert['id']; ?>" 
+                                           target="_blank" class="action-btn verify-btn" title="Verificar autenticidade">
+                                            <i class="fas fa-shield-check"></i>
+                                        </a>
+                                        
+                                        <button type="button" 
+                                                onclick="regenerateCertificate('<?php echo $cert['id']; ?>', '<?php echo addslashes($cert['user_name']); ?>')"
+                                                class="action-btn regen-btn" title="Regerar T101">
+                                            <i class="fas fa-redo"></i>
+                                        </button>
+                                        
+                                        <button type="button" 
+                                                onclick="deleteCertificate('<?php echo $cert['id']; ?>', '<?php echo addslashes($cert['user_name']); ?>', '<?php echo addslashes($cert['lecture_title']); ?>')"
+                                                class="action-btn delete-btn" title="Deletar">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        <?php endif; ?>
+    </div>
