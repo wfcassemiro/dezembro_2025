@@ -698,11 +698,13 @@ include __DIR__ . '/vision/includes/head.php';
                                 <?php echo htmlspecialchars($lecture['speaker']); ?>
                             </div>
                             
-                            <!-- Descrição -->
+                            <!-- Descrição - Texto completo sem truncar -->
                             <?php if (!empty($lecture['description'])): ?>
                                 <p class="palestra-description">
-                                    <?php echo htmlspecialchars(substr($lecture['description'], 0, 180)); ?><?php echo strlen($lecture['description']) > 180 ? '...' : ''; ?>
+                                    <?php echo htmlspecialchars($lecture['description']); ?>
                                 </p>
+                            <?php else: ?>
+                                <p class="palestra-description">&nbsp;</p>
                             <?php endif; ?>
                             
                             <!-- Seção de Botões de Calendário -->
