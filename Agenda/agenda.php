@@ -157,6 +157,7 @@ include __DIR__ . '/vision/includes/head.php';
     grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
     gap: 30px;
     margin-bottom: 60px;
+    align-items: stretch;
 }
 
 @media (max-width: 768px) {
@@ -165,7 +166,7 @@ include __DIR__ . '/vision/includes/head.php';
     }
 }
 
-/* Card de Palestra - Estilo igual à captura */
+/* Card de Palestra - Usando Flexbox para alinhamento consistente */
 .palestra-card {
     background: var(--glass-bg, rgba(255, 255, 255, 0.1));
     backdrop-filter: blur(20px);
@@ -173,6 +174,9 @@ include __DIR__ . '/vision/includes/head.php';
     border-radius: 16px;
     overflow: hidden;
     transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
 }
 
 .palestra-card:hover {
@@ -187,6 +191,7 @@ include __DIR__ . '/vision/includes/head.php';
     height: 220px;
     overflow: hidden;
     position: relative;
+    flex-shrink: 0;
 }
 
 .palestra-image {
@@ -217,17 +222,22 @@ include __DIR__ . '/vision/includes/head.php';
     margin-bottom: 10px;
 }
 
-/* Conteúdo do Card */
+/* Conteúdo do Card - Flexbox para distribuição */
 .palestra-content {
     padding: 25px;
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
 }
 
-/* Data e Hora - Estilo igual à captura */
+/* Data e Hora - Altura fixa */
 .palestra-date-time {
     display: flex;
     gap: 10px;
     margin-bottom: 15px;
     flex-wrap: wrap;
+    min-height: 38px;
+    flex-shrink: 0;
 }
 
 .date-badge {
@@ -254,7 +264,7 @@ include __DIR__ . '/vision/includes/head.php';
     font-weight: 700;
 }
 
-/* Título da Palestra */
+/* Título da Palestra - Altura fixa para 2 linhas */
 .palestra-title {
     font-size: 1.25rem;
     font-weight: 700;
@@ -262,9 +272,11 @@ include __DIR__ . '/vision/includes/head.php';
     margin-bottom: 12px;
     line-height: 1.4;
     text-align: left;
+    min-height: 70px;
+    flex-shrink: 0;
 }
 
-/* Palestrante - Estilo igual à captura (cor laranja) */
+/* Palestrante - Altura fixa */
 .palestra-speaker {
     color: #f39c12;
     font-size: 0.95rem;
@@ -274,19 +286,22 @@ include __DIR__ . '/vision/includes/head.php';
     align-items: center;
     gap: 8px;
     text-align: left;
+    min-height: 24px;
+    flex-shrink: 0;
 }
 
 .palestra-speaker i {
     color: #f39c12;
 }
 
-/* Descrição */
+/* Descrição - Ocupa o espaço restante, texto completo */
 .palestra-description {
     color: rgba(255,255,255,0.8);
     font-size: 0.9rem;
     line-height: 1.6;
     margin-bottom: 20px;
     text-align: left;
+    flex-grow: 1;
 }
 
 /* Seção de Botões de Calendário - Estilo igual à captura */
