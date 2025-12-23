@@ -304,11 +304,12 @@ include __DIR__ . '/vision/includes/head.php';
     flex-grow: 1;
 }
 
-/* Seção de Botões de Calendário - Estilo igual à captura */
+/* Seção de Botões de Calendário - Sempre no fundo do card */
 .calendar-section {
     border-top: 1px solid rgba(255,255,255,0.1);
     padding-top: 20px;
-    margin-top: 15px;
+    margin-top: auto;
+    flex-shrink: 0;
 }
 
 .calendar-label {
