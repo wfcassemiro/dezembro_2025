@@ -4,6 +4,9 @@
  * Versão corrigida com credenciais SMTP corretas
  */
 
+// Define o fuso horário correto para o Brasil
+date_default_timezone_set('America/Sao_Paulo');
+
 require_once __DIR__ . '/config/database.php';
 
 // Carrega PHPMailer diretamente
