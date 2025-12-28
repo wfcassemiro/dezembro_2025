@@ -6,20 +6,17 @@
 
 require_once __DIR__ . '/../config/database.php';
 
+// Carrega PHPMailer diretamente (sem depender do autoload do Composer)
+require_once __DIR__ . '/../vendor/phpmailer/phpmailer/src/Exception.php';
+require_once __DIR__ . '/../vendor/phpmailer/phpmailer/src/PHPMailer.php';
+require_once __DIR__ . '/../vendor/phpmailer/phpmailer/src/SMTP.php';
+
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
 use PHPMailer\PHPMailer\SMTP;
 
-// Verifica se o autoload do Composer existe
-$autoloadPath = __DIR__ . '/../vendor/autoload.php';
-if (!file_exists($autoloadPath)) {
-    die('Erro: Composer autoload não encontrado. Execute "composer install" na raiz do projeto.');
-}
-require $autoloadPath;
-
 $message = '';
 $message_type = '';
-$debug_info = ''; // Para debug (remover em produção)
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $email = trim($_POST['email'] ?? '');
@@ -40,7 +37,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $token = bin2hex(random_bytes(32));
                     $expires_at = date('Y-m-d H:i:s', strtotime('+1 hour'));
 
-                    // Remove tokens antigos do mesmo usuário (opcional, mas recomendado)
+                    // Remove tokens antigos do mesmo usuário
                     $pdo->prepare("DELETE FROM password_resets WHERE user_id = ?")->execute([$user['id']]);
 
                     // Insere novo token
@@ -60,12 +57,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     // Configurações gerais
                     $mail->CharSet = 'UTF-8';
                     $mail->Encoding = 'base64';
-
-                    // Ativa debug apenas se necessário (comente em produção)
-                    // $mail->SMTPDebug = SMTP::DEBUG_SERVER;
-                    // $mail->Debugoutput = function($str, $level) use (&$debug_info) {
-                    //     $debug_info .= "$level: $str\n";
-                    // };
 
                     // Tentativa 1: SSL/465
                     try {
