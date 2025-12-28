@@ -1,15 +1,15 @@
 <?php
 /**
  * Recuperação de Senha - Translators101
- * Arquivo corrigido com melhorias no envio de e-mail
+ * Versão com DEBUG habilitado e Loading visual
  */
 
-require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/config/database.php';
 
-// Carrega PHPMailer diretamente (sem depender do autoload do Composer)
-require_once __DIR__ . '/../vendor/phpmailer/phpmailer/src/Exception.php';
-require_once __DIR__ . '/../vendor/phpmailer/phpmailer/src/PHPMailer.php';
-require_once __DIR__ . '/../vendor/phpmailer/phpmailer/src/SMTP.php';
+// Carrega PHPMailer diretamente
+require_once __DIR__ . '/vendor/phpmailer/phpmailer/src/Exception.php';
+require_once __DIR__ . '/vendor/phpmailer/phpmailer/src/PHPMailer.php';
+require_once __DIR__ . '/vendor/phpmailer/phpmailer/src/SMTP.php';
 
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
@@ -17,6 +17,13 @@ use PHPMailer\PHPMailer\SMTP;
 
 $message = '';
 $message_type = '';
+$debug_output = ''; // Armazena mensagens de debug
+
+// ============================================
+// 🔧 MODO DEBUG - Defina como TRUE para ver erros detalhados
+// ⚠️ IMPORTANTE: Mude para FALSE em produção!
+// ============================================
+$DEBUG_MODE = true;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $email = trim($_POST['email'] ?? '');
@@ -28,9 +35,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $message_type = 'error';
         } else {
             try {
-                $stmt = $pdo->prepare("SELECT id, name FROM users WHERE email = ? AND deleted_at IS NULL");
+                $stmt = $pdo->prepare("SELECT id, name FROM users WHERE email = ?");
                 $stmt->execute([$email]);
                 $user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+                if ($DEBUG_MODE) {
+                    $debug_output .= "✅ Conexão com banco OK\n";
+                    $debug_output .= "🔍 Buscando usuário: $email\n";
+                    $debug_output .= $user ? "✅ Usuário encontrado (ID: {$user['id']})\n" : "❌ Usuário NÃO encontrado\n";
+                }
 
                 if ($user) {
                     // Gera token seguro
@@ -44,10 +57,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $stmt = $pdo->prepare("INSERT INTO password_resets (user_id, token, expires_at) VALUES (?, ?, ?)");
                     $stmt->execute([$user['id'], $token, $expires_at]);
 
+                    if ($DEBUG_MODE) {
+                        $debug_output .= "✅ Token gerado e salvo no banco\n";
+                    }
+
                     // Link de reset
                     $reset_link = "https://v.translators101.com/reset_password.php?token=" . urlencode($token);
 
-                    // Nome do usuário para personalização
+                    // Nome do usuário
                     $user_name = $user['name'] ?? 'Usuário';
 
                     // Configura PHPMailer
@@ -58,8 +75,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $mail->CharSet = 'UTF-8';
                     $mail->Encoding = 'base64';
 
-                    // Tentativa 1: SSL/465
+                    // ============================================
+                    // 🔧 DEBUG SMTP - Captura logs detalhados
+                    // ============================================
+                    if ($DEBUG_MODE) {
+                        $mail->SMTPDebug = SMTP::DEBUG_SERVER; // Nível 2 - mostra comandos e respostas
+                        $mail->Debugoutput = function($str, $level) use (&$debug_output) {
+                            $debug_output .= "SMTP[$level]: $str\n";
+                        };
+                    }
+
+                    // ============================================
+                    // 🔄 Tentativa 1: SSL/465
+                    // ============================================
                     try {
+                        if ($DEBUG_MODE) {
+                            $debug_output .= "\n📧 Tentativa 1: SSL na porta 465...\n";
+                        }
+
                         $mail->isSMTP();
                         $mail->Host       = 'smtp.hostinger.com';
                         $mail->SMTPAuth   = true;
@@ -80,15 +113,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                         $mail->send();
                         $emailSent = true;
-                        error_log("[PASSWORD_RESET] E-mail enviado com sucesso via SSL/465 para: $email");
+
+                        if ($DEBUG_MODE) {
+                            $debug_output .= "✅ E-mail enviado com SUCESSO via SSL/465!\n";
+                        }
 
                     } catch (Exception $e) {
-                        error_log("[PASSWORD_RESET] Tentativa SSL/465 falhou: {$mail->ErrorInfo}");
+                        if ($DEBUG_MODE) {
+                            $debug_output .= "❌ SSL/465 FALHOU: {$mail->ErrorInfo}\n";
+                            $debug_output .= "📋 Exceção: {$e->getMessage()}\n";
+                        }
 
-                        // Tentativa 2: TLS/587 (Fallback)
+                        // ============================================
+                        // 🔄 Tentativa 2: TLS/587 (Fallback)
+                        // ============================================
                         try {
+                            if ($DEBUG_MODE) {
+                                $debug_output .= "\n📧 Tentativa 2: TLS na porta 587...\n";
+                            }
+
+                            // Limpa configurações anteriores
                             $mail->clearAddresses();
                             $mail->clearAllRecipients();
+                            
+                            // Recria instância para garantir limpeza total
+                            $mail = new PHPMailer(true);
+                            $mail->CharSet = 'UTF-8';
+                            $mail->Encoding = 'base64';
+
+                            if ($DEBUG_MODE) {
+                                $mail->SMTPDebug = SMTP::DEBUG_SERVER;
+                                $mail->Debugoutput = function($str, $level) use (&$debug_output) {
+                                    $debug_output .= "SMTP[$level]: $str\n";
+                                };
+                            }
 
                             $mail->isSMTP();
                             $mail->Host       = 'smtp.hostinger.com';
@@ -110,10 +168,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                             $mail->send();
                             $emailSent = true;
-                            error_log("[PASSWORD_RESET] E-mail enviado com sucesso via TLS/587 (fallback) para: $email");
+
+                            if ($DEBUG_MODE) {
+                                $debug_output .= "✅ E-mail enviado com SUCESSO via TLS/587!\n";
+                            }
 
                         } catch (Exception $ex) {
-                            error_log("[PASSWORD_RESET] Erro total no envio de e-mail para $email: {$ex->getMessage()}");
+                            if ($DEBUG_MODE) {
+                                $debug_output .= "❌ TLS/587 FALHOU: {$mail->ErrorInfo}\n";
+                                $debug_output .= "📋 Exceção: {$ex->getMessage()}\n";
+                            }
                             $message = "Não foi possível enviar o e-mail. Tente novamente mais tarde.";
                             $message_type = 'error';
                         }
@@ -125,14 +189,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
 
                 } else {
-                    // Por segurança, mostramos a mesma mensagem mesmo se o email não existir
-                    $message = "Se o e-mail estiver cadastrado, você receberá um link de recuperação em instantes.";
-                    $message_type = 'success';
-                    error_log("[PASSWORD_RESET] Tentativa de recuperação para e-mail não cadastrado: $email");
+                    $message = "E-mail não encontrado em nossa base de dados.";
+                    $message_type = 'error';
                 }
 
             } catch (PDOException $e) {
-                error_log("[PASSWORD_RESET] Erro de banco de dados: " . $e->getMessage());
+                if ($DEBUG_MODE) {
+                    $debug_output .= "❌ ERRO DE BANCO: " . $e->getMessage() . "\n";
+                }
                 $message = "Ocorreu um erro interno. Tente novamente mais tarde.";
                 $message_type = 'error';
             }
@@ -164,8 +228,7 @@ function getEmailBody($reset_link, $user_name) {
                 ⏰ Este link expira em <strong>1 hora</strong>.
             </p>
             <p style='font-size: 14px; color: #ccc;'>
-                Se você não solicitou esta redefinição, ignore este e-mail.<br>
-                Sua senha permanecerá inalterada.
+                Se você não solicitou esta redefinição, ignore este e-mail.
             </p>
             <hr style='border: none; border-top: 1px solid #444; margin: 25px 0;'>
             <p style='font-size: 12px; color: #999;'>
@@ -178,7 +241,7 @@ function getEmailBody($reset_link, $user_name) {
 }
 
 /**
- * Gera o corpo texto simples do e-mail (fallback)
+ * Gera o corpo texto simples do e-mail
  */
 function getEmailAltBody($reset_link, $user_name) {
     return "Olá, {$user_name}!\n\n" .
@@ -192,8 +255,8 @@ function getEmailAltBody($reset_link, $user_name) {
 }
 ?>
 
-<?php include __DIR__ . '/../vision/includes/head.php'; ?>
-<?php include __DIR__ . '/../vision/includes/header.php'; ?>
+<?php include __DIR__ . '/vision/includes/head.php'; ?>
+<?php include __DIR__ . '/vision/includes/header.php'; ?>
 
 <style>
 .alert-success {
@@ -237,7 +300,88 @@ function getEmailAltBody($reset_link, $user_name) {
     color: #fff;
     text-decoration: underline;
 }
+
+/* 🔧 DEBUG BOX */
+.debug-box {
+    background: #1a1a2e;
+    border: 2px solid #e94560;
+    border-radius: 8px;
+    padding: 15px;
+    margin-top: 20px;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    color: #00ff00;
+    max-height: 400px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+
+.debug-box h4 {
+    color: #e94560;
+    margin: 0 0 10px 0;
+    font-family: Arial, sans-serif;
+}
+
+/* 🔄 LOADING OVERLAY */
+.loading-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 9999;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+}
+
+.loading-overlay.active {
+    display: flex;
+}
+
+.loading-spinner {
+    width: 60px;
+    height: 60px;
+    border: 4px solid rgba(255, 215, 0, 0.3);
+    border-top: 4px solid #FFD700;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.loading-text {
+    color: #fff;
+    margin-top: 20px;
+    font-size: 16px;
+    text-align: center;
+}
+
+.loading-subtext {
+    color: #ccc;
+    margin-top: 8px;
+    font-size: 13px;
+}
+
+/* Botão desabilitado durante loading */
+.cta-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
 </style>
+
+<!-- 🔄 Loading Overlay -->
+<div class="loading-overlay" id="loadingOverlay">
+    <div class="loading-spinner"></div>
+    <div class="loading-text">📧 Enviando e-mail de recuperação...</div>
+    <div class="loading-subtext">Isso pode levar alguns segundos</div>
+</div>
 
 <div class="main-content">
     <div class="glass-hero">
@@ -257,7 +401,7 @@ function getEmailAltBody($reset_link, $user_name) {
         </div>
         <?php endif; ?>
         
-        <form method="POST" class="vision-form">
+        <form method="POST" class="vision-form" id="forgotForm">
             <div class="form-group">
                 <label for="email">
                     <i class="fas fa-envelope"></i> Seu e-mail cadastrado
@@ -269,18 +413,44 @@ function getEmailAltBody($reset_link, $user_name) {
             </div>
             
             <div class="form-actions">
-                <button type="submit" class="cta-btn">
+                <button type="submit" class="cta-btn" id="submitBtn">
                     <i class="fas fa-paper-plane"></i> Enviar link de recuperação
                 </button>
             </div>
         </form>
 
+        <?php if ($DEBUG_MODE && !empty($debug_output)): ?>
+        <!-- 🔧 DEBUG OUTPUT -->
+        <div class="debug-box">
+            <h4>🔧 DEBUG MODE - Informações de Diagnóstico</h4>
+<?php echo htmlspecialchars($debug_output); ?>
+        </div>
+        <?php endif; ?>
+
         <div style="text-align: center; margin-top: 25px; padding-top: 20px; border-top: 1px solid var(--glass-border);">
-            <a href="../login.php" class="back-link">
+            <a href="login.php" class="back-link">
                 <i class="fas fa-arrow-left"></i> Voltar ao login
             </a>
         </div>
     </div>
 </div>
 
-<?php include __DIR__ . '/../vision/includes/footer.php'; ?>
+<script>
+// 🔄 Mostra loading ao enviar formulário
+document.getElementById('forgotForm').addEventListener('submit', function(e) {
+    var email = document.getElementById('email').value.trim();
+    
+    if (email) {
+        document.getElementById('loadingOverlay').classList.add('active');
+        document.getElementById('submitBtn').disabled = true;
+    }
+});
+
+// Se a página carregou com mensagem (POST processado), esconde o loading
+window.addEventListener('load', function() {
+    document.getElementById('loadingOverlay').classList.remove('active');
+    document.getElementById('submitBtn').disabled = false;
+});
+</script>
+
+<?php include __DIR__ . '/vision/includes/footer.php'; ?>
