@@ -1,7 +1,7 @@
 <?php
 /**
  * Recuperação de Senha - Translators101
- * Versão com DEBUG habilitado e Loading visual
+ * Versão corrigida com credenciais SMTP corretas
  */
 
 require_once __DIR__ . '/config/database.php';
@@ -17,19 +17,27 @@ use PHPMailer\PHPMailer\SMTP;
 
 $message = '';
 $message_type = '';
-$debug_output = ''; // Armazena mensagens de debug
+$debug_output = '';
 
 // ============================================
-// 🔧 MODO DEBUG - Defina como TRUE para ver erros detalhados
-// ⚠️ IMPORTANTE: Mude para FALSE em produção!
+// 🔧 MODO DEBUG - Mude para FALSE em produção
 // ============================================
 $DEBUG_MODE = true;
+
+// ============================================
+// 📧 CREDENCIAIS SMTP CORRETAS
+// ============================================
+$SMTP_HOST     = 'smtp.hostinger.com';
+$SMTP_PORT     = 465;
+$SMTP_USERNAME = 'contato@translators101.com';
+$SMTP_PASSWORD = 'r:#D$!r=X1';  // ← SENHA CORRETA!
+$SMTP_FROM     = 'contato@translators101.com';
+$SMTP_NAME     = 'Translators101';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $email = trim($_POST['email'] ?? '');
 
     if (!empty($email)) {
-        // Validação de formato de email
         if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
             $message = "Por favor, informe um e-mail válido.";
             $message_type = 'error';
@@ -46,14 +54,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
 
                 if ($user) {
-                    // Gera token seguro
                     $token = bin2hex(random_bytes(32));
                     $expires_at = date('Y-m-d H:i:s', strtotime('+1 hour'));
 
-                    // Remove tokens antigos do mesmo usuário
                     $pdo->prepare("DELETE FROM password_resets WHERE user_id = ?")->execute([$user['id']]);
-
-                    // Insere novo token
                     $stmt = $pdo->prepare("INSERT INTO password_resets (user_id, token, expires_at) VALUES (?, ?, ?)");
                     $stmt->execute([$user['id'], $token, $expires_at]);
 
@@ -61,50 +65,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $debug_output .= "✅ Token gerado e salvo no banco\n";
                     }
 
-                    // Link de reset
                     $reset_link = "https://v.translators101.com/reset_password.php?token=" . urlencode($token);
-
-                    // Nome do usuário
                     $user_name = $user['name'] ?? 'Usuário';
 
                     // Configura PHPMailer
                     $mail = new PHPMailer(true);
                     $emailSent = false;
 
-                    // Configurações gerais
                     $mail->CharSet = 'UTF-8';
                     $mail->Encoding = 'base64';
 
-                    // ============================================
-                    // 🔧 DEBUG SMTP - Captura logs detalhados
-                    // ============================================
                     if ($DEBUG_MODE) {
-                        $mail->SMTPDebug = SMTP::DEBUG_SERVER; // Nível 2 - mostra comandos e respostas
+                        $mail->SMTPDebug = SMTP::DEBUG_SERVER;
                         $mail->Debugoutput = function($str, $level) use (&$debug_output) {
                             $debug_output .= "SMTP[$level]: $str\n";
                         };
                     }
 
-                    // ============================================
-                    // 🔄 Tentativa 1: SSL/465
-                    // ============================================
+                    // Tentativa SSL/465
                     try {
                         if ($DEBUG_MODE) {
-                            $debug_output .= "\n📧 Tentativa 1: SSL na porta 465...\n";
+                            $debug_output .= "\n📧 Tentativa: SSL na porta 465...\n";
+                            $debug_output .= "🔑 Usando credenciais de: $SMTP_USERNAME\n";
                         }
 
                         $mail->isSMTP();
-                        $mail->Host       = 'smtp.hostinger.com';
+                        $mail->Host       = $SMTP_HOST;
                         $mail->SMTPAuth   = true;
-                        $mail->Username   = 'contato@translators101.com';
-                        $mail->Password   = 'Pa392ap!';
+                        $mail->Username   = $SMTP_USERNAME;
+                        $mail->Password   = $SMTP_PASSWORD;
                         $mail->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS;
-                        $mail->Port       = 465;
+                        $mail->Port       = $SMTP_PORT;
                         $mail->Timeout    = 30;
 
-                        $mail->setFrom('contato@translators101.com', 'Suporte T101');
+                        $mail->setFrom($SMTP_FROM, $SMTP_NAME);
                         $mail->addAddress($email);
-                        $mail->addReplyTo('contato@translators101.com', 'Suporte T101');
+                        $mail->addReplyTo($SMTP_FROM, $SMTP_NAME);
 
                         $mail->isHTML(true);
                         $mail->Subject = "Redefina sua senha - Translators101";
@@ -115,72 +111,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $emailSent = true;
 
                         if ($DEBUG_MODE) {
-                            $debug_output .= "✅ E-mail enviado com SUCESSO via SSL/465!\n";
+                            $debug_output .= "✅ E-mail enviado com SUCESSO!\n";
                         }
 
                     } catch (Exception $e) {
                         if ($DEBUG_MODE) {
-                            $debug_output .= "❌ SSL/465 FALHOU: {$mail->ErrorInfo}\n";
+                            $debug_output .= "❌ FALHOU: {$mail->ErrorInfo}\n";
                             $debug_output .= "📋 Exceção: {$e->getMessage()}\n";
                         }
-
-                        // ============================================
-                        // 🔄 Tentativa 2: TLS/587 (Fallback)
-                        // ============================================
-                        try {
-                            if ($DEBUG_MODE) {
-                                $debug_output .= "\n📧 Tentativa 2: TLS na porta 587...\n";
-                            }
-
-                            // Limpa configurações anteriores
-                            $mail->clearAddresses();
-                            $mail->clearAllRecipients();
-                            
-                            // Recria instância para garantir limpeza total
-                            $mail = new PHPMailer(true);
-                            $mail->CharSet = 'UTF-8';
-                            $mail->Encoding = 'base64';
-
-                            if ($DEBUG_MODE) {
-                                $mail->SMTPDebug = SMTP::DEBUG_SERVER;
-                                $mail->Debugoutput = function($str, $level) use (&$debug_output) {
-                                    $debug_output .= "SMTP[$level]: $str\n";
-                                };
-                            }
-
-                            $mail->isSMTP();
-                            $mail->Host       = 'smtp.hostinger.com';
-                            $mail->SMTPAuth   = true;
-                            $mail->Username   = 'contato@translators101.com';
-                            $mail->Password   = 'Pa392ap!';
-                            $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-                            $mail->Port       = 587;
-                            $mail->Timeout    = 30;
-
-                            $mail->setFrom('contato@translators101.com', 'Suporte T101');
-                            $mail->addAddress($email);
-                            $mail->addReplyTo('contato@translators101.com', 'Suporte T101');
-
-                            $mail->isHTML(true);
-                            $mail->Subject = "Redefina sua senha - Translators101";
-                            $mail->Body    = getEmailBody($reset_link, $user_name);
-                            $mail->AltBody = getEmailAltBody($reset_link, $user_name);
-
-                            $mail->send();
-                            $emailSent = true;
-
-                            if ($DEBUG_MODE) {
-                                $debug_output .= "✅ E-mail enviado com SUCESSO via TLS/587!\n";
-                            }
-
-                        } catch (Exception $ex) {
-                            if ($DEBUG_MODE) {
-                                $debug_output .= "❌ TLS/587 FALHOU: {$mail->ErrorInfo}\n";
-                                $debug_output .= "📋 Exceção: {$ex->getMessage()}\n";
-                            }
-                            $message = "Não foi possível enviar o e-mail. Tente novamente mais tarde.";
-                            $message_type = 'error';
-                        }
+                        $message = "Não foi possível enviar o e-mail. Tente novamente mais tarde.";
+                        $message_type = 'error';
                     }
 
                     if ($emailSent) {
@@ -207,9 +147,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-/**
- * Gera o corpo HTML do e-mail
- */
 function getEmailBody($reset_link, $user_name) {
     return "
     <div style='font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9;'>
@@ -240,9 +177,6 @@ function getEmailBody($reset_link, $user_name) {
     ";
 }
 
-/**
- * Gera o corpo texto simples do e-mail
- */
 function getEmailAltBody($reset_link, $user_name) {
     return "Olá, {$user_name}!\n\n" .
            "Você solicitou a redefinição de sua senha na Translators101.\n\n" .
@@ -301,7 +235,7 @@ function getEmailAltBody($reset_link, $user_name) {
     text-decoration: underline;
 }
 
-/* 🔧 DEBUG BOX */
+/* DEBUG BOX */
 .debug-box {
     background: #1a1a2e;
     border: 2px solid #e94560;
@@ -323,7 +257,7 @@ function getEmailAltBody($reset_link, $user_name) {
     font-family: Arial, sans-serif;
 }
 
-/* 🔄 LOADING OVERLAY */
+/* LOADING OVERLAY */
 .loading-overlay {
     display: none;
     position: fixed;
@@ -369,14 +303,13 @@ function getEmailAltBody($reset_link, $user_name) {
     font-size: 13px;
 }
 
-/* Botão desabilitado durante loading */
 .cta-btn:disabled {
     opacity: 0.6;
     cursor: not-allowed;
 }
 </style>
 
-<!-- 🔄 Loading Overlay -->
+<!-- Loading Overlay -->
 <div class="loading-overlay" id="loadingOverlay">
     <div class="loading-spinner"></div>
     <div class="loading-text">📧 Enviando e-mail de recuperação...</div>
@@ -420,7 +353,6 @@ function getEmailAltBody($reset_link, $user_name) {
         </form>
 
         <?php if ($DEBUG_MODE && !empty($debug_output)): ?>
-        <!-- 🔧 DEBUG OUTPUT -->
         <div class="debug-box">
             <h4>🔧 DEBUG MODE - Informações de Diagnóstico</h4>
 <?php echo htmlspecialchars($debug_output); ?>
@@ -436,17 +368,14 @@ function getEmailAltBody($reset_link, $user_name) {
 </div>
 
 <script>
-// 🔄 Mostra loading ao enviar formulário
 document.getElementById('forgotForm').addEventListener('submit', function(e) {
     var email = document.getElementById('email').value.trim();
-    
     if (email) {
         document.getElementById('loadingOverlay').classList.add('active');
         document.getElementById('submitBtn').disabled = true;
     }
 });
 
-// Se a página carregou com mensagem (POST processado), esconde o loading
 window.addEventListener('load', function() {
     document.getElementById('loadingOverlay').classList.remove('active');
     document.getElementById('submitBtn').disabled = false;
