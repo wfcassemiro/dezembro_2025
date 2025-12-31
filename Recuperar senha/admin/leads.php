@@ -7,24 +7,17 @@
 session_start();
 date_default_timezone_set('America/Sao_Paulo');
 
-require_once __DIR__ . '/../config/database.php';
-
-// Verificar se é admin
-function isLoggedIn() {
-    return isset($_SESSION['user_id']);
-}
-
-function isAdmin() {
-    return isset($_SESSION['role']) && $_SESSION['role'] === 'admin';
-}
-
-// Bloquear acesso se não for admin
-if (!isLoggedIn() || !isAdmin()) {
+// Verifica autenticação e permissão de admin
+if (!isset($_SESSION['user_id']) || !isset($_SESSION['is_admin']) || !$_SESSION['is_admin']) {
     header('Location: /login.php');
     exit;
 }
 
+require_once __DIR__ . '/../config/database.php';
+
 $page_title = 'Gerenciar Leads - Admin';
+$success_message = '';
+$error_message = '';
 
 // Processar exclusão de lead
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
@@ -405,8 +398,13 @@ include __DIR__ . '/../vision/includes/sidebar.php';
     color: white;
 }
 
-.lead-email {
+.lead-email a {
     color: #c084fc;
+    text-decoration: none;
+}
+
+.lead-email a:hover {
+    text-decoration: underline;
 }
 
 .lead-whatsapp {
