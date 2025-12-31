@@ -19,8 +19,20 @@ $page_title = 'Gerenciar Leads - Admin';
 $success_message = '';
 $error_message = '';
 
-// Processar exclusão de lead
+// Verificar se a coluna pode_receber_email existe, se não, criar
+try {
+    $stmt = $pdo->query("SHOW COLUMNS FROM leads LIKE 'pode_receber_email'");
+    if ($stmt->rowCount() === 0) {
+        $pdo->exec("ALTER TABLE leads ADD COLUMN pode_receber_email TINYINT(1) DEFAULT 1");
+    }
+} catch (PDOException $e) {
+    error_log("Erro ao verificar/criar coluna pode_receber_email: " . $e->getMessage());
+}
+
+// Processar ações POST
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
+    
+    // Excluir lead
     if ($_POST['action'] === 'delete_lead' && isset($_POST['lead_id'])) {
         try {
             $stmt = $pdo->prepare("DELETE FROM leads WHERE id = ?");
@@ -31,10 +43,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         }
     }
     
+    // Alterar permissão de email
+    if ($_POST['action'] === 'toggle_email' && isset($_POST['lead_id'])) {
+        try {
+            $new_status = isset($_POST['pode_receber_email']) ? 1 : 0;
+            $stmt = $pdo->prepare("UPDATE leads SET pode_receber_email = ? WHERE id = ?");
+            $stmt->execute([$new_status, $_POST['lead_id']]);
+            $success_message = $new_status ? "Lead adicionado à lista de e-mails!" : "Lead removido da lista de e-mails!";
+        } catch (PDOException $e) {
+            $error_message = "Erro ao atualizar permissão: " . $e->getMessage();
+        }
+    }
+    
+    // Alterar múltiplos leads de uma vez
+    if ($_POST['action'] === 'bulk_toggle_email' && isset($_POST['lead_ids'])) {
+        try {
+            $new_status = ($_POST['bulk_status'] === 'enable') ? 1 : 0;
+            $lead_ids = $_POST['lead_ids'];
+            $placeholders = implode(',', array_fill(0, count($lead_ids), '?'));
+            $stmt = $pdo->prepare("UPDATE leads SET pode_receber_email = ? WHERE id IN ($placeholders)");
+            $params = array_merge([$new_status], $lead_ids);
+            $stmt->execute($params);
+            $count = count($lead_ids);
+            $success_message = $new_status ? 
+                "$count lead(s) adicionado(s) à lista de e-mails!" : 
+                "$count lead(s) removido(s) da lista de e-mails!";
+        } catch (PDOException $e) {
+            $error_message = "Erro ao atualizar em lote: " . $e->getMessage();
+        }
+    }
+    
     // Exportar para CSV
     if ($_POST['action'] === 'export_csv') {
         try {
-            $stmt = $pdo->query("SELECT nome, email, whatsapp, fonte, created_at FROM leads ORDER BY created_at DESC");
+            $stmt = $pdo->query("SELECT nome, email, whatsapp, fonte, COALESCE(pode_receber_email, 1) as pode_receber_email, created_at FROM leads ORDER BY created_at DESC");
             $leads = $stmt->fetchAll(PDO::FETCH_ASSOC);
             
             header('Content-Type: text/csv; charset=utf-8');
@@ -46,7 +88,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             fprintf($output, chr(0xEF).chr(0xBB).chr(0xBF));
             
             // Cabeçalho
-            fputcsv($output, ['Nome', 'E-mail', 'WhatsApp', 'Fonte', 'Data/Hora Cadastro'], ';');
+            fputcsv($output, ['Nome', 'E-mail', 'WhatsApp', 'Fonte', 'Recebe E-mails', 'Data/Hora Cadastro'], ';');
             
             // Dados
             foreach ($leads as $lead) {
@@ -55,6 +97,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     $lead['email'],
                     $lead['whatsapp'],
                     $lead['fonte'],
+                    $lead['pode_receber_email'] ? 'Sim' : 'Não',
                     date('d/m/Y H:i:s', strtotime($lead['created_at']))
                 ], ';');
             }
@@ -71,9 +114,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 $filter_fonte = $_GET['fonte'] ?? '';
 $filter_data_inicio = $_GET['data_inicio'] ?? '';
 $filter_data_fim = $_GET['data_fim'] ?? '';
+$filter_email_status = $_GET['email_status'] ?? '';
 $search = $_GET['search'] ?? '';
 
-$sql = "SELECT * FROM leads WHERE 1=1";
+$sql = "SELECT *, COALESCE(pode_receber_email, 1) as pode_receber_email FROM leads WHERE 1=1";
 $params = [];
 
 if (!empty($filter_fonte)) {
@@ -89,6 +133,12 @@ if (!empty($filter_data_inicio)) {
 if (!empty($filter_data_fim)) {
     $sql .= " AND DATE(created_at) <= ?";
     $params[] = $filter_data_fim;
+}
+
+if ($filter_email_status === 'enabled') {
+    $sql .= " AND COALESCE(pode_receber_email, 1) = 1";
+} elseif ($filter_email_status === 'disabled') {
+    $sql .= " AND COALESCE(pode_receber_email, 1) = 0";
 }
 
 if (!empty($search)) {
@@ -118,6 +168,10 @@ try {
     $stmt = $pdo->query("SELECT COUNT(*) as total FROM leads");
     $stats['total'] = $stmt->fetch()['total'];
     
+    // Leads que podem receber email
+    $stmt = $pdo->query("SELECT COUNT(*) as total FROM leads WHERE COALESCE(pode_receber_email, 1) = 1");
+    $stats['recebem_email'] = $stmt->fetch()['total'];
+    
     // Leads hoje
     $stmt = $pdo->query("SELECT COUNT(*) as total FROM leads WHERE DATE(created_at) = CURDATE()");
     $stats['hoje'] = $stmt->fetch()['total'];
@@ -135,7 +189,7 @@ try {
     $stats['fontes'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
 } catch (PDOException $e) {
-    $stats = ['total' => 0, 'hoje' => 0, 'semana' => 0, 'mes' => 0, 'fontes' => []];
+    $stats = ['total' => 0, 'recebem_email' => 0, 'hoje' => 0, 'semana' => 0, 'mes' => 0, 'fontes' => []];
 }
 
 // Incluir templates
@@ -173,12 +227,13 @@ include __DIR__ . '/../vision/includes/sidebar.php';
 .header-actions {
     display: flex;
     gap: 10px;
+    flex-wrap: wrap;
 }
 
 /* Stats Cards */
 .stats-grid {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(5, 1fr);
     gap: 20px;
     margin-bottom: 25px;
 }
@@ -192,7 +247,7 @@ include __DIR__ . '/../vision/includes/sidebar.php';
 }
 
 .stat-card .stat-number {
-    font-size: 2.5rem;
+    font-size: 2.2rem;
     font-weight: bold;
     color: #c084fc;
     margin-bottom: 5px;
@@ -200,7 +255,7 @@ include __DIR__ . '/../vision/includes/sidebar.php';
 
 .stat-card .stat-label {
     color: rgba(255, 255, 255, 0.7);
-    font-size: 0.9rem;
+    font-size: 0.85rem;
 }
 
 .stat-card.highlight {
@@ -210,6 +265,15 @@ include __DIR__ . '/../vision/includes/sidebar.php';
 
 .stat-card.highlight .stat-number {
     color: #FFD700;
+}
+
+.stat-card.stat-green {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(16, 185, 129, 0.1));
+    border-color: rgba(16, 185, 129, 0.3);
+}
+
+.stat-card.stat-green .stat-number {
+    color: #10b981;
 }
 
 /* Filters */
@@ -239,7 +303,7 @@ include __DIR__ . '/../vision/includes/sidebar.php';
 
 .filter-group {
     flex: 1;
-    min-width: 150px;
+    min-width: 140px;
 }
 
 .filter-group label {
@@ -325,6 +389,38 @@ include __DIR__ . '/../vision/includes/sidebar.php';
 
 .btn-danger:hover {
     background: rgba(239, 68, 68, 0.3);
+}
+
+.btn-warning {
+    background: rgba(245, 158, 11, 0.2);
+    color: #f59e0b;
+    border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.btn-warning:hover {
+    background: rgba(245, 158, 11, 0.3);
+}
+
+/* Bulk Actions */
+.bulk-actions {
+    display: none;
+    background: rgba(192, 132, 252, 0.1);
+    border: 1px solid rgba(192, 132, 252, 0.3);
+    border-radius: 10px;
+    padding: 15px 20px;
+    margin-bottom: 20px;
+    align-items: center;
+    gap: 15px;
+    flex-wrap: wrap;
+}
+
+.bulk-actions.active {
+    display: flex;
+}
+
+.bulk-actions span {
+    color: #c084fc;
+    font-weight: 600;
 }
 
 /* Table */
@@ -447,6 +543,77 @@ include __DIR__ . '/../vision/includes/sidebar.php';
     font-size: 0.8rem;
 }
 
+/* Email Toggle */
+.email-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.toggle-switch {
+    position: relative;
+    width: 44px;
+    height: 24px;
+}
+
+.toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(239, 68, 68, 0.3);
+    transition: .3s;
+    border-radius: 24px;
+}
+
+.toggle-slider:before {
+    position: absolute;
+    content: "";
+    height: 18px;
+    width: 18px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: .3s;
+    border-radius: 50%;
+}
+
+.toggle-switch input:checked + .toggle-slider {
+    background-color: rgba(16, 185, 129, 0.5);
+}
+
+.toggle-switch input:checked + .toggle-slider:before {
+    transform: translateX(20px);
+}
+
+.toggle-label {
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.6);
+}
+
+.toggle-label.enabled {
+    color: #10b981;
+}
+
+.toggle-label.disabled {
+    color: #ef4444;
+}
+
+/* Actions column */
+.actions-cell {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
 /* Messages */
 .alert {
     padding: 15px 20px;
@@ -487,7 +654,21 @@ include __DIR__ . '/../vision/includes/sidebar.php';
     color: rgba(255, 255, 255, 0.7);
 }
 
+/* Checkbox styling */
+.lead-checkbox {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    accent-color: #c084fc;
+}
+
 /* Responsive */
+@media (max-width: 1200px) {
+    .stats-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
 @media (max-width: 992px) {
     .stats-grid {
         grid-template-columns: repeat(2, 1fr);
@@ -511,6 +692,11 @@ include __DIR__ . '/../vision/includes/sidebar.php';
     .filter-group {
         width: 100%;
     }
+    
+    .bulk-actions {
+        flex-direction: column;
+        align-items: flex-start;
+    }
 }
 </style>
 
@@ -526,6 +712,9 @@ include __DIR__ . '/../vision/includes/sidebar.php';
                         <i class="fas fa-file-csv"></i> Exportar CSV
                     </button>
                 </form>
+                <a href="emails.php" class="btn btn-primary">
+                    <i class="fas fa-envelope"></i> Enviar E-mails
+                </a>
             </div>
         </div>
 
@@ -547,6 +736,10 @@ include __DIR__ . '/../vision/includes/sidebar.php';
             <div class="stat-card highlight">
                 <div class="stat-number"><?php echo $stats['total']; ?></div>
                 <div class="stat-label">Total de Leads</div>
+            </div>
+            <div class="stat-card stat-green">
+                <div class="stat-number"><?php echo $stats['recebem_email']; ?></div>
+                <div class="stat-label">Recebem E-mails</div>
             </div>
             <div class="stat-card">
                 <div class="stat-number"><?php echo $stats['hoje']; ?></div>
@@ -586,6 +779,15 @@ include __DIR__ . '/../vision/includes/sidebar.php';
                 </div>
                 
                 <div class="filter-group">
+                    <label>Status E-mail</label>
+                    <select name="email_status">
+                        <option value="">Todos</option>
+                        <option value="enabled" <?php echo $filter_email_status === 'enabled' ? 'selected' : ''; ?>>Recebem e-mails</option>
+                        <option value="disabled" <?php echo $filter_email_status === 'disabled' ? 'selected' : ''; ?>>Não recebem</option>
+                    </select>
+                </div>
+                
+                <div class="filter-group">
                     <label>Data Início</label>
                     <input type="date" name="data_inicio" value="<?php echo htmlspecialchars($filter_data_inicio); ?>">
                 </div>
@@ -606,6 +808,25 @@ include __DIR__ . '/../vision/includes/sidebar.php';
             </form>
         </div>
 
+        <!-- Bulk Actions -->
+        <div class="bulk-actions" id="bulkActions">
+            <span><i class="fas fa-check-square"></i> <span id="selectedCount">0</span> selecionado(s)</span>
+            <form method="POST" style="display: inline;" id="bulkForm">
+                <input type="hidden" name="action" value="bulk_toggle_email">
+                <input type="hidden" name="bulk_status" id="bulkStatus" value="">
+                <div id="selectedLeadsContainer"></div>
+                <button type="submit" class="btn btn-success" onclick="document.getElementById('bulkStatus').value='enable'">
+                    <i class="fas fa-envelope"></i> Adicionar à lista
+                </button>
+                <button type="submit" class="btn btn-warning" onclick="document.getElementById('bulkStatus').value='disable'">
+                    <i class="fas fa-envelope-slash"></i> Remover da lista
+                </button>
+            </form>
+            <button type="button" class="btn btn-secondary" onclick="deselectAll()">
+                <i class="fas fa-times"></i> Cancelar
+            </button>
+        </div>
+
         <!-- Leads Table -->
         <div class="leads-card">
             <div class="leads-card-header">
@@ -624,10 +845,12 @@ include __DIR__ . '/../vision/includes/sidebar.php';
                 <table class="leads-table">
                     <thead>
                         <tr>
+                            <th><input type="checkbox" id="selectAll" onclick="toggleSelectAll()" class="lead-checkbox"></th>
                             <th>Nome</th>
                             <th>E-mail</th>
                             <th>WhatsApp</th>
                             <th>Fonte</th>
+                            <th>Recebe E-mails</th>
                             <th>Data/Hora (GMT-3)</th>
                             <th>Ações</th>
                         </tr>
@@ -635,6 +858,11 @@ include __DIR__ . '/../vision/includes/sidebar.php';
                     <tbody>
                         <?php foreach ($leads as $lead): ?>
                         <tr>
+                            <td>
+                                <input type="checkbox" class="lead-checkbox lead-select" 
+                                       value="<?php echo htmlspecialchars($lead['id']); ?>" 
+                                       onchange="updateBulkActions()">
+                            </td>
                             <td class="lead-name"><?php echo htmlspecialchars($lead['nome']); ?></td>
                             <td class="lead-email">
                                 <a href="mailto:<?php echo htmlspecialchars($lead['email']); ?>">
@@ -656,11 +884,26 @@ include __DIR__ . '/../vision/includes/sidebar.php';
                             <td>
                                 <span class="fonte-badge"><?php echo htmlspecialchars($lead['fonte']); ?></span>
                             </td>
+                            <td>
+                                <form method="POST" class="email-toggle">
+                                    <input type="hidden" name="action" value="toggle_email">
+                                    <input type="hidden" name="lead_id" value="<?php echo htmlspecialchars($lead['id']); ?>">
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" name="pode_receber_email" 
+                                               <?php echo $lead['pode_receber_email'] ? 'checked' : ''; ?>
+                                               onchange="this.form.submit()">
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                    <span class="toggle-label <?php echo $lead['pode_receber_email'] ? 'enabled' : 'disabled'; ?>">
+                                        <?php echo $lead['pode_receber_email'] ? 'Sim' : 'Não'; ?>
+                                    </span>
+                                </form>
+                            </td>
                             <td class="date-time">
                                 <span class="date"><?php echo date('d/m/Y', strtotime($lead['created_at'])); ?></span>
                                 <span class="time"><?php echo date('H:i:s', strtotime($lead['created_at'])); ?></span>
                             </td>
-                            <td>
+                            <td class="actions-cell">
                                 <form method="POST" style="display: inline;" 
                                       onsubmit="return confirm('Tem certeza que deseja excluir este lead?');">
                                     <input type="hidden" name="action" value="delete_lead">
@@ -681,6 +924,51 @@ include __DIR__ . '/../vision/includes/sidebar.php';
 </div>
 
 <script>
+// Selecionar/Desselecionar todos
+function toggleSelectAll() {
+    const selectAll = document.getElementById('selectAll');
+    const checkboxes = document.querySelectorAll('.lead-select');
+    checkboxes.forEach(cb => cb.checked = selectAll.checked);
+    updateBulkActions();
+}
+
+// Atualizar ações em lote
+function updateBulkActions() {
+    const checkboxes = document.querySelectorAll('.lead-select:checked');
+    const bulkActions = document.getElementById('bulkActions');
+    const selectedCount = document.getElementById('selectedCount');
+    const container = document.getElementById('selectedLeadsContainer');
+    
+    if (checkboxes.length > 0) {
+        bulkActions.classList.add('active');
+        selectedCount.textContent = checkboxes.length;
+        
+        // Limpar e adicionar os IDs selecionados
+        container.innerHTML = '';
+        checkboxes.forEach(cb => {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'lead_ids[]';
+            input.value = cb.value;
+            container.appendChild(input);
+        });
+    } else {
+        bulkActions.classList.remove('active');
+    }
+    
+    // Atualizar checkbox "Selecionar todos"
+    const allCheckboxes = document.querySelectorAll('.lead-select');
+    document.getElementById('selectAll').checked = 
+        allCheckboxes.length > 0 && checkboxes.length === allCheckboxes.length;
+}
+
+// Desselecionar todos
+function deselectAll() {
+    document.querySelectorAll('.lead-select').forEach(cb => cb.checked = false);
+    document.getElementById('selectAll').checked = false;
+    updateBulkActions();
+}
+
 // Auto-hide alerts after 5 seconds
 document.querySelectorAll('.alert').forEach(function(alert) {
     setTimeout(function() {
