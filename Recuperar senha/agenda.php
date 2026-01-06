@@ -819,6 +819,101 @@ include __DIR__ . '/vision/includes/sidebar.php';
 </div>
 
 <script>
+// ========================================
+// PAGINAÇÃO DE PALESTRAS
+// ========================================
+const ITEMS_PER_PAGE = 3;
+let currentPage = 1;
+const totalItems = document.querySelectorAll('.palestra-card').length;
+const totalPages = Math.ceil(totalItems / ITEMS_PER_PAGE);
+
+function changePage(direction) {
+    currentPage += direction;
+    
+    // Limites
+    if (currentPage < 1) currentPage = 1;
+    if (currentPage > totalPages) currentPage = totalPages;
+    
+    // Atualizar visibilidade dos cards
+    const cards = document.querySelectorAll('.palestra-card');
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    const endIndex = startIndex + ITEMS_PER_PAGE;
+    
+    cards.forEach((card, index) => {
+        if (index >= startIndex && index < endIndex) {
+            card.classList.remove('hidden');
+        } else {
+            card.classList.add('hidden');
+        }
+    });
+    
+    // Atualizar botões e info
+    document.getElementById('currentPage').textContent = currentPage;
+    document.getElementById('prevBtn').disabled = currentPage === 1;
+    document.getElementById('nextBtn').disabled = currentPage === totalPages;
+    
+    // Scroll suave para o topo da seção
+    document.querySelector('.section-title').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// ========================================
+// SELETOR DE PAÍS E CÓDIGO
+// ========================================
+function selectCountry(select) {
+    const value = select.value;
+    const codeInput = document.getElementById('country_code');
+    
+    if (value === 'outro') {
+        // Permitir digitação manual
+        codeInput.value = '+';
+        codeInput.focus();
+        codeInput.select();
+    } else if (value) {
+        codeInput.value = value;
+    }
+    
+    // Atualizar placeholder do telefone
+    updatePhonePlaceholder(value || codeInput.value);
+    
+    // Limpar campo de telefone
+    document.getElementById('whatsapp_number').value = '';
+}
+
+// Permitir digitação manual do código
+document.getElementById('country_code')?.addEventListener('input', function(e) {
+    let value = e.target.value;
+    
+    // Garantir que começa com +
+    if (!value.startsWith('+')) {
+        value = '+' + value.replace(/[^0-9]/g, '');
+    } else {
+        value = '+' + value.substring(1).replace(/[^0-9]/g, '');
+    }
+    
+    e.target.value = value;
+    updatePhonePlaceholder(value);
+});
+
+function updatePhonePlaceholder(code) {
+    const input = document.getElementById('whatsapp_number');
+    
+    const placeholders = {
+        '+55': '(11) 99999-9999',
+        '+1': '(555) 123-4567',
+        '+351': '912 345 678',
+        '+34': '612 345 678',
+        '+33': '6 12 34 56 78',
+        '+49': '151 1234 5678',
+        '+44': '7911 123456',
+        '+39': '333 123 4567',
+        '+54': '11 1234-5678',
+        '+56': '9 1234 5678',
+        '+52': '55 1234 5678'
+    };
+    
+    input.placeholder = placeholders[code] || '1234 5678 9012';
+}
+
 // Combinar código do país com número antes do envio
 document.querySelector('.lead-form')?.addEventListener('submit', function(e) {
     const countryCode = document.getElementById('country_code').value;
@@ -829,7 +924,13 @@ document.querySelector('.lead-form')?.addEventListener('submit', function(e) {
     // Validação mínima
     if (phoneNumber.length < 7) {
         e.preventDefault();
-        alert('Por favor, insira um número de telefone válido.');
+        alert('Por favor, insira um número de telefone válido (mínimo 7 dígitos).');
+        return false;
+    }
+    
+    if (!countryCode.match(/^\+\d{1,4}$/)) {
+        e.preventDefault();
+        alert('Por favor, insira um código de país válido (ex: +55).');
         return false;
     }
 });
@@ -906,30 +1007,9 @@ document.getElementById('whatsapp_number')?.addEventListener('input', function(e
     e.target.value = value;
 });
 
-// Atualizar placeholder quando mudar o país
-document.getElementById('country_code')?.addEventListener('change', function() {
-    const input = document.getElementById('whatsapp_number');
-    const code = this.value;
-    
-    // Limpar o campo quando mudar de país
-    input.value = '';
-    
-    // Atualizar placeholder baseado no país
-    const placeholders = {
-        '+55': '(11) 99999-9999',
-        '+1': '(555) 123-4567',
-        '+351': '912 345 678',
-        '+34': '612 345 678',
-        '+33': '6 12 34 56 78',
-        '+49': '151 1234 5678',
-        '+44': '7911 123456',
-        '+39': '333 123 4567'
-    };
-    
-    input.placeholder = placeholders[code] || '1234 5678 9012';
-});
-
-// Função para adicionar ao Google Calendar
+// ========================================
+// FUNÇÕES DE CALENDÁRIO
+// ========================================
 function addToGoogleCalendar(title, date, time, description) {
     const startDate = new Date(date + 'T' + time);
     const endDate = new Date(startDate.getTime() + 2 * 60 * 60 * 1000); // +2 horas
@@ -943,7 +1023,6 @@ function addToGoogleCalendar(title, date, time, description) {
     window.open(url, '_blank');
 }
 
-// Função para baixar arquivo ICS
 function downloadICS(title, date, time, description) {
     const startDate = new Date(date + 'T' + time);
     const endDate = new Date(startDate.getTime() + 2 * 60 * 60 * 1000);
@@ -982,7 +1061,9 @@ END:VCALENDAR`;
     document.body.removeChild(link);
 }
 
-// Fade out das mensagens
+// ========================================
+// FADE OUT DAS MENSAGENS
+// ========================================
 setTimeout(function() {
     document.querySelectorAll('.alert').forEach(function(alert) {
         alert.style.transition = 'opacity 1s';
