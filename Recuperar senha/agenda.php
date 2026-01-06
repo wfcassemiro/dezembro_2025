@@ -547,45 +547,108 @@ include __DIR__ . '/vision/includes/sidebar.php';
                 <div class="form-group">
                     <label for="whatsapp"><i class="fab fa-whatsapp"></i> Seu WhatsApp (com código do país)</label>
                     <div class="phone-input-container">
-                        <select id="country_code" class="country-select">
-                            <option value="+55">🇧🇷 +55</option>
-                            <option value="+1">🇺🇸 +1</option>
-                            <option value="+351">🇵🇹 +351</option>
-                            <option value="+34">🇪🇸 +34</option>
-                            <option value="+33">🇫🇷 +33</option>
-                            <option value="+49">🇩🇪 +49</option>
-                            <option value="+44">🇬🇧 +44</option>
-                            <option value="+39">🇮🇹 +39</option>
-                            <option value="+81">🇯🇵 +81</option>
-                            <option value="+86">🇨🇳 +86</option>
-                            <option value="+54">🇦🇷 +54</option>
-                            <option value="+56">🇨🇱 +56</option>
-                            <option value="+57">🇨🇴 +57</option>
-                            <option value="+52">🇲🇽 +52</option>
-                            <option value="+51">🇵🇪 +51</option>
-                            <option value="+598">🇺🇾 +598</option>
-                            <option value="+595">🇵🇾 +595</option>
-                            <option value="+591">🇧🇴 +591</option>
-                            <option value="+593">🇪🇨 +593</option>
-                            <option value="+58">🇻🇪 +58</option>
-                            <option value="+41">🇨🇭 +41</option>
-                            <option value="+31">🇳🇱 +31</option>
-                            <option value="+32">🇧🇪 +32</option>
-                            <option value="+43">🇦🇹 +43</option>
-                            <option value="+61">🇦🇺 +61</option>
-                            <option value="+64">🇳🇿 +64</option>
-                            <option value="+27">🇿🇦 +27</option>
-                            <option value="+972">🇮🇱 +972</option>
-                            <option value="+971">🇦🇪 +971</option>
-                            <option value="+91">🇮🇳 +91</option>
-                            <option value="+82">🇰🇷 +82</option>
-                        </select>
+                        <div class="country-input-wrapper">
+                            <input type="text" id="country_code" class="country-code-input" value="+55" maxlength="5" placeholder="+55">
+                            <select id="country_select" class="country-select" onchange="selectCountry(this)">
+                                <option value="">Selecione...</option>
+                                <optgroup label="América do Sul">
+                                    <option value="+55" data-flag="🇧🇷">🇧🇷 Brasil (+55)</option>
+                                    <option value="+54" data-flag="🇦🇷">🇦🇷 Argentina (+54)</option>
+                                    <option value="+591" data-flag="🇧🇴">🇧🇴 Bolívia (+591)</option>
+                                    <option value="+56" data-flag="🇨🇱">🇨🇱 Chile (+56)</option>
+                                    <option value="+57" data-flag="🇨🇴">🇨🇴 Colômbia (+57)</option>
+                                    <option value="+593" data-flag="🇪🇨">🇪🇨 Equador (+593)</option>
+                                    <option value="+595" data-flag="🇵🇾">🇵🇾 Paraguai (+595)</option>
+                                    <option value="+51" data-flag="🇵🇪">🇵🇪 Peru (+51)</option>
+                                    <option value="+598" data-flag="🇺🇾">🇺🇾 Uruguai (+598)</option>
+                                    <option value="+58" data-flag="🇻🇪">🇻🇪 Venezuela (+58)</option>
+                                    <option value="+592" data-flag="🇬🇾">🇬🇾 Guiana (+592)</option>
+                                    <option value="+597" data-flag="🇸🇷">🇸🇷 Suriname (+597)</option>
+                                </optgroup>
+                                <optgroup label="América do Norte e Central">
+                                    <option value="+1" data-flag="🇺🇸">🇺🇸 EUA (+1)</option>
+                                    <option value="+1" data-flag="🇨🇦">🇨🇦 Canadá (+1)</option>
+                                    <option value="+52" data-flag="🇲🇽">🇲🇽 México (+52)</option>
+                                    <option value="+502" data-flag="🇬🇹">🇬🇹 Guatemala (+502)</option>
+                                    <option value="+503" data-flag="🇸🇻">🇸🇻 El Salvador (+503)</option>
+                                    <option value="+504" data-flag="🇭🇳">🇭🇳 Honduras (+504)</option>
+                                    <option value="+505" data-flag="🇳🇮">🇳🇮 Nicarágua (+505)</option>
+                                    <option value="+506" data-flag="🇨🇷">🇨🇷 Costa Rica (+506)</option>
+                                    <option value="+507" data-flag="🇵🇦">🇵🇦 Panamá (+507)</option>
+                                    <option value="+509" data-flag="🇭🇹">🇭🇹 Haiti (+509)</option>
+                                    <option value="+53" data-flag="🇨🇺">🇨🇺 Cuba (+53)</option>
+                                    <option value="+1809" data-flag="🇩🇴">🇩🇴 Rep. Dominicana (+1809)</option>
+                                    <option value="+1787" data-flag="🇵🇷">🇵🇷 Porto Rico (+1787)</option>
+                                </optgroup>
+                                <optgroup label="Europa">
+                                    <option value="+351" data-flag="🇵🇹">🇵🇹 Portugal (+351)</option>
+                                    <option value="+34" data-flag="🇪🇸">🇪🇸 Espanha (+34)</option>
+                                    <option value="+33" data-flag="🇫🇷">🇫🇷 França (+33)</option>
+                                    <option value="+49" data-flag="🇩🇪">🇩🇪 Alemanha (+49)</option>
+                                    <option value="+44" data-flag="🇬🇧">🇬🇧 Reino Unido (+44)</option>
+                                    <option value="+39" data-flag="🇮🇹">🇮🇹 Itália (+39)</option>
+                                    <option value="+41" data-flag="🇨🇭">🇨🇭 Suíça (+41)</option>
+                                    <option value="+31" data-flag="🇳🇱">🇳🇱 Holanda (+31)</option>
+                                    <option value="+32" data-flag="🇧🇪">🇧🇪 Bélgica (+32)</option>
+                                    <option value="+43" data-flag="🇦🇹">🇦🇹 Áustria (+43)</option>
+                                    <option value="+48" data-flag="🇵🇱">🇵🇱 Polônia (+48)</option>
+                                    <option value="+46" data-flag="🇸🇪">🇸🇪 Suécia (+46)</option>
+                                    <option value="+47" data-flag="🇳🇴">🇳🇴 Noruega (+47)</option>
+                                    <option value="+45" data-flag="🇩🇰">🇩🇰 Dinamarca (+45)</option>
+                                    <option value="+358" data-flag="🇫🇮">🇫🇮 Finlândia (+358)</option>
+                                    <option value="+353" data-flag="🇮🇪">🇮🇪 Irlanda (+353)</option>
+                                    <option value="+30" data-flag="🇬🇷">🇬🇷 Grécia (+30)</option>
+                                    <option value="+420" data-flag="🇨🇿">🇨🇿 Rep. Tcheca (+420)</option>
+                                    <option value="+36" data-flag="🇭🇺">🇭🇺 Hungria (+36)</option>
+                                    <option value="+40" data-flag="🇷🇴">🇷🇴 Romênia (+40)</option>
+                                    <option value="+380" data-flag="🇺🇦">🇺🇦 Ucrânia (+380)</option>
+                                    <option value="+7" data-flag="🇷🇺">🇷🇺 Rússia (+7)</option>
+                                </optgroup>
+                                <optgroup label="Ásia">
+                                    <option value="+81" data-flag="🇯🇵">🇯🇵 Japão (+81)</option>
+                                    <option value="+86" data-flag="🇨🇳">🇨🇳 China (+86)</option>
+                                    <option value="+82" data-flag="🇰🇷">🇰🇷 Coreia do Sul (+82)</option>
+                                    <option value="+91" data-flag="🇮🇳">🇮🇳 Índia (+91)</option>
+                                    <option value="+62" data-flag="🇮🇩">🇮🇩 Indonésia (+62)</option>
+                                    <option value="+66" data-flag="🇹🇭">🇹🇭 Tailândia (+66)</option>
+                                    <option value="+84" data-flag="🇻🇳">🇻🇳 Vietnã (+84)</option>
+                                    <option value="+60" data-flag="🇲🇾">🇲🇾 Malásia (+60)</option>
+                                    <option value="+65" data-flag="🇸🇬">🇸🇬 Singapura (+65)</option>
+                                    <option value="+63" data-flag="🇵🇭">🇵🇭 Filipinas (+63)</option>
+                                    <option value="+852" data-flag="🇭🇰">🇭🇰 Hong Kong (+852)</option>
+                                    <option value="+886" data-flag="🇹🇼">🇹🇼 Taiwan (+886)</option>
+                                    <option value="+90" data-flag="🇹🇷">🇹🇷 Turquia (+90)</option>
+                                    <option value="+972" data-flag="🇮🇱">🇮🇱 Israel (+972)</option>
+                                    <option value="+971" data-flag="🇦🇪">🇦🇪 Emirados Árabes (+971)</option>
+                                    <option value="+966" data-flag="🇸🇦">🇸🇦 Arábia Saudita (+966)</option>
+                                    <option value="+92" data-flag="🇵🇰">🇵🇰 Paquistão (+92)</option>
+                                    <option value="+880" data-flag="🇧🇩">🇧🇩 Bangladesh (+880)</option>
+                                </optgroup>
+                                <optgroup label="África">
+                                    <option value="+27" data-flag="🇿🇦">🇿🇦 África do Sul (+27)</option>
+                                    <option value="+20" data-flag="🇪🇬">🇪🇬 Egito (+20)</option>
+                                    <option value="+234" data-flag="🇳🇬">🇳🇬 Nigéria (+234)</option>
+                                    <option value="+254" data-flag="🇰🇪">🇰🇪 Quênia (+254)</option>
+                                    <option value="+212" data-flag="🇲🇦">🇲🇦 Marrocos (+212)</option>
+                                    <option value="+213" data-flag="🇩🇿">🇩🇿 Argélia (+213)</option>
+                                    <option value="+233" data-flag="🇬🇭">🇬🇭 Gana (+233)</option>
+                                    <option value="+244" data-flag="🇦🇴">🇦🇴 Angola (+244)</option>
+                                    <option value="+258" data-flag="🇲🇿">🇲🇿 Moçambique (+258)</option>
+                                    <option value="+238" data-flag="🇨🇻">🇨🇻 Cabo Verde (+238)</option>
+                                </optgroup>
+                                <optgroup label="Oceania">
+                                    <option value="+61" data-flag="🇦🇺">🇦🇺 Austrália (+61)</option>
+                                    <option value="+64" data-flag="🇳🇿">🇳🇿 Nova Zelândia (+64)</option>
+                                </optgroup>
+                                <option value="outro">✏️ Outro (digitar código)</option>
+                            </select>
+                        </div>
                         <input type="tel" id="whatsapp_number" placeholder="99999-9999" required>
                     </div>
                     <input type="hidden" id="whatsapp" name="whatsapp">
                     <p class="phone-hint">
                         <i class="fas fa-info-circle"></i>
-                        Digite apenas os números, sem espaços ou caracteres especiais
+                        Selecione seu país ou digite o código manualmente. Ex: +55 para Brasil
                     </p>
                 </div>
 
