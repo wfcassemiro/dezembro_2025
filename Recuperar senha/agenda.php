@@ -539,6 +539,12 @@ include __DIR__ . '/vision/includes/sidebar.php';
 }
 
 /* Responsive */
+@media (max-width: 1200px) {
+    .palestras-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
 @media (max-width: 768px) {
     .agenda-hero h1 {
         font-size: 1.8rem;
@@ -556,8 +562,12 @@ include __DIR__ . '/vision/includes/sidebar.php';
         flex-direction: column;
     }
     
-    .country-select {
+    .country-input-wrapper {
         width: 100%;
+    }
+    
+    .pagination-container {
+        flex-wrap: wrap;
     }
 }
 </style>
