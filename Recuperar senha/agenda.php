@@ -520,10 +520,6 @@ include __DIR__ . '/vision/includes/sidebar.php';
     .country-input-wrapper {
         width: 100%;
     }
-    
-    .pagination-container {
-        flex-wrap: wrap;
-    }
 }
 </style>
 
