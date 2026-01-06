@@ -205,16 +205,31 @@ include __DIR__ . '/vision/includes/sidebar.php';
     gap: 10px;
 }
 
+.country-input-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    width: 160px;
+    flex-shrink: 0;
+}
+
+.country-code-input {
+    width: 100% !important;
+    padding: 14px 10px !important;
+    text-align: center;
+    font-weight: 600;
+    font-size: 1.1rem !important;
+}
+
 .country-select {
-    width: 120px;
-    padding: 14px 10px;
+    width: 100%;
+    padding: 8px 5px;
     border: 1px solid rgba(255, 255, 255, 0.2);
-    border-radius: 10px;
+    border-radius: 8px;
     background: rgba(0, 0, 0, 0.3);
     color: white;
-    font-size: 0.95rem;
+    font-size: 0.8rem;
     cursor: pointer;
-    flex-shrink: 0;
 }
 
 .country-select:focus {
@@ -222,7 +237,19 @@ include __DIR__ . '/vision/includes/sidebar.php';
     border-color: #c084fc;
 }
 
-.phone-input-container input {
+.country-select optgroup {
+    background: #1a1a1a;
+    color: #c084fc;
+    font-weight: 600;
+}
+
+.country-select option {
+    background: #2a2a2a;
+    color: white;
+    padding: 5px;
+}
+
+.phone-input-container input[type="tel"] {
     flex: 1;
 }
 
