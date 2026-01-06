@@ -326,51 +326,13 @@ include __DIR__ . '/vision/includes/sidebar.php';
     gap: 25px;
 }
 
-.palestra-card.hidden {
-    display: none;
-}
-
-/* Pagination */
-.pagination-container {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    gap: 15px;
-    margin-top: 30px;
-    padding: 20px;
-}
-
-.pagination-btn {
-    padding: 10px 20px;
-    background: rgba(192, 132, 252, 0.2);
-    border: 1px solid rgba(192, 132, 252, 0.3);
-    border-radius: 8px;
-    color: #c084fc;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.pagination-btn:hover:not(:disabled) {
-    background: rgba(192, 132, 252, 0.3);
-    transform: translateY(-2px);
-}
-
-.pagination-btn:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-}
-
-.pagination-info {
-    color: rgba(255, 255, 255, 0.7);
-    font-size: 0.95rem;
-}
-
-.pagination-info strong {
-    color: #c084fc;
+.palestra-image {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    object-fit: cover;
+    object-position: center;
+    background: linear-gradient(135deg, rgba(142, 68, 173, 0.3), rgba(59, 130, 246, 0.2));
+    display: block;
 }
 
 .palestra-card {
