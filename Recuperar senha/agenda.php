@@ -756,43 +756,6 @@ include __DIR__ . '/vision/includes/sidebar.php';
 
 <script>
 // ========================================
-// PAGINAÇÃO DE PALESTRAS
-// ========================================
-const ITEMS_PER_PAGE = 3;
-let currentPage = 1;
-const totalItems = document.querySelectorAll('.palestra-card').length;
-const totalPages = Math.ceil(totalItems / ITEMS_PER_PAGE);
-
-function changePage(direction) {
-    currentPage += direction;
-    
-    // Limites
-    if (currentPage < 1) currentPage = 1;
-    if (currentPage > totalPages) currentPage = totalPages;
-    
-    // Atualizar visibilidade dos cards
-    const cards = document.querySelectorAll('.palestra-card');
-    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-    const endIndex = startIndex + ITEMS_PER_PAGE;
-    
-    cards.forEach((card, index) => {
-        if (index >= startIndex && index < endIndex) {
-            card.classList.remove('hidden');
-        } else {
-            card.classList.add('hidden');
-        }
-    });
-    
-    // Atualizar botões e info
-    document.getElementById('currentPage').textContent = currentPage;
-    document.getElementById('prevBtn').disabled = currentPage === 1;
-    document.getElementById('nextBtn').disabled = currentPage === totalPages;
-    
-    // Scroll suave para o topo da seção
-    document.querySelector('.section-title').scrollIntoView({ behavior: 'smooth', block: 'start' });
-}
-
-// ========================================
 // SELETOR DE PAÍS E CÓDIGO
 // ========================================
 function selectCountry(select) {
