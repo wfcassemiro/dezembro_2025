@@ -753,9 +753,9 @@ include __DIR__ . '/vision/includes/sidebar.php';
             <p>Fique atento! Em breve teremos novas palestras.</p>
         </div>
         <?php else: ?>
-        <div class="palestras-grid">
-            <?php foreach ($upcomingLectures as $lecture): ?>
-            <div class="palestra-card">
+        <div class="palestras-grid" id="palestrasGrid">
+            <?php foreach ($upcomingLectures as $index => $lecture): ?>
+            <div class="palestra-card <?php echo $index >= 3 ? 'hidden' : ''; ?>" data-index="<?php echo $index; ?>">
                 <?php if (!empty($lecture['image_path'])): ?>
                 <img src="<?php echo htmlspecialchars($lecture['image_path']); ?>" alt="<?php echo htmlspecialchars($lecture['title']); ?>" class="palestra-image">
                 <?php else: ?>
@@ -799,6 +799,21 @@ include __DIR__ . '/vision/includes/sidebar.php';
             </div>
             <?php endforeach; ?>
         </div>
+        
+        <?php if (count($upcomingLectures) > 3): ?>
+        <!-- Paginação -->
+        <div class="pagination-container">
+            <button class="pagination-btn" id="prevBtn" onclick="changePage(-1)" disabled>
+                <i class="fas fa-chevron-left"></i> Anterior
+            </button>
+            <span class="pagination-info">
+                Página <strong id="currentPage">1</strong> de <strong id="totalPages"><?php echo ceil(count($upcomingLectures) / 3); ?></strong>
+            </span>
+            <button class="pagination-btn" id="nextBtn" onclick="changePage(1)">
+                Próxima <i class="fas fa-chevron-right"></i>
+            </button>
+        </div>
+        <?php endif; ?>
         <?php endif; ?>
     </div>
 </div>
