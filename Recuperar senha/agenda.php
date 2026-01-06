@@ -349,13 +349,6 @@ include __DIR__ . '/vision/includes/sidebar.php';
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
 }
 
-.palestra-image {
-    width: 100%;
-    height: 200px;
-    object-fit: cover;
-    background: linear-gradient(135deg, rgba(142, 68, 173, 0.3), rgba(59, 130, 246, 0.2));
-}
-
 .palestra-content {
     padding: 20px;
 }
